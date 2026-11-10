@@ -560,14 +560,14 @@
         <div class="flex items-center space-x-2 mb-2 px-1">
           <button
             v-for="dirInfo in stationArrivalDirections"
-            :key="dirInfo.direction"
-            @click="activeArrivalDir = dirInfo.direction"
+            :key="dirInfo.directionKey || dirInfo.direction"
+            @click="activeArrivalDir = (dirInfo.directionKey || dirInfo.direction)"
             class="text-xs font-bold px-3 py-1.5 rounded-full transition-all flex items-center space-x-1"
-            :class="activeArrivalDir === dirInfo.direction ? 'bg-blue-600 text-white shadow-xs scale-105' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'"
+            :class="activeArrivalDir === (dirInfo.directionKey || dirInfo.direction) ? 'bg-blue-600 text-white shadow-xs scale-105' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'"
           >
             <span>{{ dirInfo.direction === '01' ? '▼' : '▲' }}</span>
             <span>往{{ dirInfo.endStationName }}</span>
-            <span v-if="activeArrivalDir === dirInfo.direction" class="w-1.5 h-1.5 rounded-full bg-white ml-0.5"></span>
+            <span v-if="activeArrivalDir === (dirInfo.directionKey || dirInfo.direction)" class="w-1.5 h-1.5 rounded-full bg-white ml-0.5"></span>
           </button>
         </div>
 
@@ -590,7 +590,7 @@
                 >
                   {{ currentArrivalInfo.train1 || '--' }}
                 </div>
-                <div v-if="currentArrivalInfo.train1Sub" class="text-[10px] text-slate-400 mt-1 truncate">
+                <div v-if="currentArrivalInfo.train1Sub" class="text-[10px] text-slate-400 mt-1 truncate" :title="currentArrivalInfo.train1Sub">
                   {{ currentArrivalInfo.train1Sub }}
                 </div>
               </div>
@@ -602,7 +602,7 @@
                 >
                   {{ currentArrivalInfo.train2 || '--' }}
                 </div>
-                <div v-if="currentArrivalInfo.train2Sub" class="text-[10px] text-slate-400 mt-1 truncate">
+                <div v-if="currentArrivalInfo.train2Sub" class="text-[10px] text-slate-400 mt-1 truncate" :title="currentArrivalInfo.train2Sub">
                   {{ currentArrivalInfo.train2Sub }}
                 </div>
               </div>
@@ -614,7 +614,7 @@
                 >
                   {{ currentArrivalInfo.train3 || '--' }}
                 </div>
-                <div v-if="currentArrivalInfo.train3Sub" class="text-[10px] text-slate-400 mt-1 truncate">
+                <div v-if="currentArrivalInfo.train3Sub" class="text-[10px] text-slate-400 mt-1 truncate" :title="currentArrivalInfo.train3Sub">
                   {{ currentArrivalInfo.train3Sub }}
                 </div>
               </div>
@@ -1199,7 +1199,9 @@
       const totalTrains = computed(() => trainsList.value.length);
 
       const currentArrivalInfo = computed(() => {
-        return stationArrivalDirections.value.find(d => d.direction === activeArrivalDir.value) || stationArrivalDirections.value[0];
+        return stationArrivalDirections.value.find(d => (d.directionKey || d.direction) === activeArrivalDir.value)
+          || stationArrivalDirections.value.find(d => d.direction === activeArrivalDir.value)
+          || stationArrivalDirections.value[0];
       });
 
       function formatLineNumber(no) {
@@ -1386,21 +1388,29 @@
 
         const isLoopLine = normalizeLineNo(lineObj.lineNo) === '07';
         const dirs = [];
-        const dirCodes = ['01', '02'];
 
-        for (const dir of dirCodes) {
-          const matchingSubs = lineObj.subLine.filter(s =>
-            s.direction === dir && s.stationList && s.stationList.some(item => item.stationNo === st.stationNo)
-          );
-          if (!matchingSubs || matchingSubs.length === 0) continue;
+        // 1. 查找所有包含当前车站的子线路，并按 (direction, 运行终点) 去重分组
+        // 这样针对 1号线 等分支线路，能同时产生「往科学城」和「往五根松」两个独立的目标方向 Tab！
+        const sublineMap = new Map();
+        for (const sub of lineObj.subLine) {
+          if (!sub.stationList || !sub.stationList.some(item => item.stationNo === st.stationNo)) {
+            continue;
+          }
+          const dir = sub.direction;
+          const endName = sub.stationList[sub.stationList.length - 1]?.stationName || (dir === '01' ? '下行终点' : '上行终点');
+          const groupKey = `${dir}_${endName}`;
+          // 同一终点的多条记录保留站点最全的
+          if (!sublineMap.has(groupKey) || sub.stationList.length > sublineMap.get(groupKey).sub.stationList.length) {
+            sublineMap.set(groupKey, { dir, endName, sub });
+          }
+        }
 
-          matchingSubs.sort((a, b) => b.stationList.length - a.stationList.length);
-          const sub = matchingSubs[0];
+        sublineMap.forEach(({ dir, endName, sub }, groupKey) => {
           const stations = sub.stationList;
           const targetIdx = stations.findIndex(s => s.stationNo === st.stationNo);
-          if (targetIdx < 0) continue;
+          if (targetIdx < 0) return;
 
-          const endStationName = stations[stations.length - 1]?.stationName || (dir === '01' ? '下行终点' : '上行终点');
+          const endStationName = endName;
           const N = stations.length;
 
           const stMap = new Map();
@@ -1486,6 +1496,7 @@
           const t3 = formatTrainTime(approaching[2], '等待发车');
 
           dirs.push({
+            directionKey: groupKey,
             direction: dir,
             endStationName: endStationName,
             train1: t1.time,
@@ -1496,9 +1507,15 @@
             train3Sub: t3.sub,
             approachingCount: approaching.length
           });
-        }
+        });
 
-        dirs.sort((a, b) => a.direction === '01' ? -1 : 1);
+        // 排序：01 (下行) 在前，02 (上行) 在后
+        dirs.sort((a, b) => {
+          if (a.direction !== b.direction) {
+            return a.direction === '01' ? -1 : 1;
+          }
+          return a.endStationName.localeCompare(b.endStationName);
+        });
         return dirs;
       }
 
@@ -1519,10 +1536,13 @@
         const liveDirs = calculateArrivalFromLiveTrains(st, activeLine.value, trainsList.value);
         if (liveDirs.length > 0) {
           stationArrivalDirections.value = liveDirs;
-          if (preferredDir && liveDirs.some(d => d.direction === preferredDir)) {
-            activeArrivalDir.value = preferredDir;
-          } else if (!liveDirs.some(d => d.direction === activeArrivalDir.value)) {
-            activeArrivalDir.value = liveDirs[0].direction;
+          if (preferredDir) {
+            const matched = liveDirs.find(d => (d.directionKey || d.direction) === preferredDir || d.direction === preferredDir);
+            if (matched) {
+              activeArrivalDir.value = matched.directionKey || matched.direction;
+            }
+          } else if (!liveDirs.some(d => (d.directionKey || d.direction) === activeArrivalDir.value)) {
+            activeArrivalDir.value = liveDirs[0].directionKey || liveDirs[0].direction;
           }
         }
 
