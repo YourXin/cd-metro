@@ -181,6 +181,25 @@
         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
         <span>{{ quickStations.length === 0 ? '添加快捷站' : '添加' }}</span>
       </button>
+
+      <!-- Toggle: 默认弹窗上次使用的快捷站 (默认不启用) -->
+      <div
+        @click="toggleAutoOpenLastQuick"
+        class="ml-auto shrink-0 flex items-center space-x-1 pl-2 text-[10px] cursor-pointer select-none"
+        :title="autoOpenLastQuickStation ? '点击关闭：默认弹窗上次快捷站' : '点击开启：启动时默认弹窗上次使用的快捷站'"
+      >
+        <span class="text-slate-500 font-medium">默认弹窗上次</span>
+        <button
+          type="button"
+          class="relative inline-flex h-4 w-7 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
+          :class="autoOpenLastQuickStation ? 'bg-blue-600' : 'bg-slate-300'"
+        >
+          <span
+            class="pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out mt-0.5 ml-0.5"
+            :class="autoOpenLastQuickStation ? 'translate-x-3' : 'translate-x-0'"
+          />
+        </button>
+      </div>
     </div>
   </div>
 
@@ -465,8 +484,20 @@
 
     <!-- Bottom Notice Bar -->
     <footer class="bg-white px-4 py-2 flex items-center justify-between text-[11px] text-slate-400 border-t border-slate-100 shrink-0">
-      <span class="text-blue-500 font-medium cursor-pointer" @click="showLineGridModal = true">切换线路</span>
-      <span>本页面信息仅供参考</span>
+      <div class="flex items-center space-x-2.5">
+        <span class="text-blue-600 font-medium cursor-pointer" @click="showLineGridModal = true">切换线路</span>
+        <span class="opacity-25">|</span>
+        <span class="text-slate-600 font-medium cursor-pointer flex items-center space-x-1" @click="showSettingsModal = true">
+          <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          <span>偏好设置</span>
+        </span>
+      </div>
+      <div class="flex items-center space-x-1.5">
+        <span v-if="autoOpenLastQuickStation && lastUsedQuickStation" class="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full font-medium" title="已开启启动时默认弹窗此快捷站">
+          📌 默认: {{ lastUsedQuickStation.stationName }}
+        </span>
+        <span v-else>信息仅供参考</span>
+      </div>
     </footer>
 
     <!-- ==================== EXACT OFFICIAL BOTTOM SHEET: 到站信息弹窗 ==================== -->
@@ -833,6 +864,72 @@
     </div>
   </div>
 
+  <!-- ==================== MODAL: PREFERENCES / SETTINGS ==================== -->
+  <div v-if="showSettingsModal" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 backdrop-blur-xs" @click.self="showSettingsModal = false">
+    <div class="bg-white w-full max-w-sm rounded-t-3xl sm:rounded-3xl p-5 shadow-2xl relative max-h-[85vh] flex flex-col bottom-sheet-anim">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div>
+          <h3 class="font-bold text-slate-900 text-base">偏好设置</h3>
+          <p class="text-xs text-slate-400 mt-0.5">个性化配置，浏览器及应用本地保存</p>
+        </div>
+        <button @click="showSettingsModal = false" class="text-slate-400 hover:text-slate-600 p-1">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="py-4 space-y-4">
+        <!-- Switch Item: 启动默认弹窗上次快捷站 (默认不启用) -->
+        <div class="flex items-center justify-between p-3.5 bg-slate-50 rounded-2xl border border-slate-100">
+          <div class="pr-3">
+            <div class="text-sm font-bold text-slate-800">启动默认弹窗上次快捷站</div>
+            <div class="text-xs text-slate-400 mt-0.5 leading-relaxed">
+              打开应用或网页时，自动定位并弹窗展示上一次查看的快捷站点到站信息（默认不启用）
+            </div>
+          </div>
+          <button
+            type="button"
+            @click="toggleAutoOpenLastQuick"
+            class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
+            :class="autoOpenLastQuickStation ? 'bg-blue-600' : 'bg-slate-300'"
+          >
+            <span
+              class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out"
+              :class="autoOpenLastQuickStation ? 'translate-x-5' : 'translate-x-0'"
+            />
+          </button>
+        </div>
+
+        <!-- Current Last Used Quick Station Display -->
+        <div class="p-3.5 bg-slate-50 rounded-2xl border border-slate-100">
+          <div class="text-xs font-bold text-slate-700 mb-1.5">当前记录的快捷站点</div>
+          <div v-if="lastUsedQuickStation" class="flex items-center justify-between">
+            <div class="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-bold text-white shadow-xs" :style="{ backgroundColor: lastUsedQuickStation.lineColor }">
+              <span>{{ formatLineNumber(lastUsedQuickStation.lineNo) }}号线·{{ lastUsedQuickStation.stationName }}</span>
+            </div>
+            <button
+              @click="quickJumpToStation(lastUsedQuickStation); showSettingsModal = false;"
+              class="text-xs text-blue-600 font-semibold hover:underline"
+            >
+              立即前往查看 &gt;
+            </button>
+          </div>
+          <div v-else class="text-xs text-slate-400">
+            暂未记录。请在首页快捷栏点击任意快捷站，即可自动记录。
+          </div>
+        </div>
+      </div>
+
+      <div class="pt-3 border-t border-slate-100">
+        <button
+          @click="showSettingsModal = false"
+          class="w-full py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold active:bg-blue-700 shadow-sm"
+        >
+          完成
+        </button>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -862,6 +959,39 @@
       const QUICK_STATIONS_STORAGE_KEY = 'cdmetro_custom_quick_stations_v1';
       const showAddQuickStationModal = ref(false);
       const modalSelectedLineNo = ref('02');
+
+      // Auto Open Last Quick Station setting (默认不启用: false)
+      const AUTO_OPEN_LAST_QUICK_KEY = 'cdmetro_setting_auto_open_last_quick_v1';
+      const LAST_USED_QUICK_STATION_KEY = 'cdmetro_last_used_quick_station_v1';
+      const autoOpenLastQuickStation = ref(false);
+      const lastUsedQuickStation = ref(null);
+      const showSettingsModal = ref(false);
+
+      function loadSettings() {
+        // 严格保证默认不启用 (仅在明确存储为 'true' 时生效)
+        const savedAuto = localStorage.getItem(AUTO_OPEN_LAST_QUICK_KEY);
+        autoOpenLastQuickStation.value = savedAuto === 'true';
+
+        const savedStation = localStorage.getItem(LAST_USED_QUICK_STATION_KEY);
+        if (savedStation) {
+          try {
+            lastUsedQuickStation.value = JSON.parse(savedStation);
+          } catch (e) {}
+        }
+      }
+
+      function toggleAutoOpenLastQuick() {
+        autoOpenLastQuickStation.value = !autoOpenLastQuickStation.value;
+        localStorage.setItem(AUTO_OPEN_LAST_QUICK_KEY, String(autoOpenLastQuickStation.value));
+      }
+
+      function recordLastUsedQuickStation(st) {
+        if (!st) return;
+        lastUsedQuickStation.value = st;
+        try {
+          localStorage.setItem(LAST_USED_QUICK_STATION_KEY, JSON.stringify(st));
+        } catch (e) {}
+      }
 
       const selectedTrain = ref(null);
       const selectedTrainStatus = ref('');
@@ -983,6 +1113,7 @@
       }
 
       async function quickJumpToStation(st) {
+        recordLastUsedQuickStation(st);
         if (currentLineNo.value !== st.lineNo) {
           currentLineNo.value = st.lineNo;
           await fetchDistances(st.lineNo);
@@ -1212,6 +1343,12 @@
         selectedStation.value = st;
         showArrivalModal.value = true;
 
+        // 若点击的站点属于快捷站，自动同步为最近使用的快捷站
+        const matchedQuick = quickStations.value.find(q => q.lineNo === currentLineNo.value && (q.stationNo === st.stationNo || q.stationName === st.stationName));
+        if (matchedQuick) {
+          recordLastUsedQuickStation(matchedQuick);
+        }
+
         // Auto locate direction: '01' for Left Track (Down), '02' for Right Track (Up)
         if (preferredDir) {
           activeArrivalDir.value = preferredDir;
@@ -1401,6 +1538,7 @@
       onMounted(async () => {
         loadSavedQuickLines();
         loadSavedQuickStations();
+        loadSettings();
 
         const params = new URLSearchParams(window.location.search);
         const urlLine = params.get('line') || params.get('lineNo');
@@ -1412,6 +1550,13 @@
         await fetchDistances(currentLineNo.value);
         await fetchTrainPositions();
         loading.value = false;
+
+        // 默认弹窗上次使用的快捷站（若用户在设置中开启且存在上次记录）
+        if (autoOpenLastQuickStation.value && lastUsedQuickStation.value) {
+          setTimeout(() => {
+            quickJumpToStation(lastUsedQuickStation.value);
+          }, 100);
+        }
 
         timer = setInterval(() => {
           refreshCountdown.value--;
@@ -1444,6 +1589,10 @@
         toggleQuickStation,
         removeQuickStation,
         resetQuickStations,
+        autoOpenLastQuickStation,
+        lastUsedQuickStation,
+        showSettingsModal,
+        toggleAutoOpenLastQuick,
         loading,
         allLines,
         currentLineNo,
