@@ -121,7 +121,7 @@ public class MainActivity extends Activity {
         settings.setAllowUniversalAccessFromFileURLs(true);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
-        settings.setUserAgentString(settings.getUserAgentString() + " CDMetroNative/1.0.5");
+        settings.setUserAgentString(settings.getUserAgentString() + " CDMetroNative/1.0.6");
 
         webView.setWebViewClient(new WebViewClient() {
             @Override

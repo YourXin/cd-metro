@@ -597,7 +597,7 @@
                 <div class="text-xs text-slate-400 font-medium mb-1">第一辆车</div>
                 <div
                   class="text-lg sm:text-xl font-extrabold tracking-tight truncate"
-                  :class="currentArrivalInfo.train1 === '列车进站' || currentArrivalInfo.train1 === '本站停靠' ? 'text-blue-600' : 'text-slate-800'"
+                  :class="currentArrivalInfo.train1 === '列车进站' || currentArrivalInfo.train1 === '即将到站' || currentArrivalInfo.train1 === '本站停靠' ? 'text-blue-600' : 'text-slate-800'"
                 >
                   {{ currentArrivalInfo.train1 || '--' }}
                 </div>
@@ -609,7 +609,7 @@
                 <div class="text-xs text-slate-400 font-medium mb-1">第二辆车</div>
                 <div
                   class="text-lg sm:text-xl font-extrabold tracking-tight truncate"
-                  :class="currentArrivalInfo.train2 === '列车进站' || currentArrivalInfo.train2 === '本站停靠' ? 'text-blue-600' : 'text-slate-800'"
+                  :class="currentArrivalInfo.train2 === '列车进站' || currentArrivalInfo.train2 === '即将到站' || currentArrivalInfo.train2 === '本站停靠' ? 'text-blue-600' : 'text-slate-800'"
                 >
                   {{ currentArrivalInfo.train2 || '--' }}
                 </div>
@@ -621,7 +621,7 @@
                 <div class="text-xs text-slate-400 font-medium mb-1">第三辆车</div>
                 <div
                   class="text-lg sm:text-xl font-extrabold tracking-tight truncate"
-                  :class="currentArrivalInfo.train3 === '列车进站' || currentArrivalInfo.train3 === '本站停靠' ? 'text-blue-600' : 'text-slate-800'"
+                  :class="currentArrivalInfo.train3 === '列车进站' || currentArrivalInfo.train3 === '即将到站' || currentArrivalInfo.train3 === '本站停靠' ? 'text-blue-600' : 'text-slate-800'"
                 >
                   {{ currentArrivalInfo.train3 || '--' }}
                 </div>
@@ -1532,14 +1532,14 @@
               if (isDocked && fromIdx >= 0) {
                 hops = (targetIdx - fromIdx + N) % N;
                 const atName = stations[fromIdx]?.stationName || '';
-                statusDesc = hops === 0 ? '本站停靠' : `在 ${atName} 停靠`;
+                statusDesc = hops === 0 ? '列车进站' : `在 ${atName} 停靠`;
               } else {
                 const effectiveToIdx = toIdx >= 0 ? toIdx : fromIdx;
                 const effectiveFromIdx = fromIdx >= 0 ? fromIdx : toIdx;
                 hops = ((targetIdx - effectiveToIdx + N) % N) + 0.5;
                 const fromName = stations[effectiveFromIdx]?.stationName || '';
                 const toName = stations[effectiveToIdx]?.stationName || '';
-                statusDesc = hops === 0.5 ? '列车进站' : `${fromName} ➔ ${toName}`;
+                statusDesc = hops === 0.5 ? '即将到站' : `${fromName} ➔ ${toName}`;
               }
               if (hops >= N - 2) hops = -1;
             } else {
@@ -1547,7 +1547,7 @@
                 if (fromIdx <= targetIdx) {
                   hops = targetIdx - fromIdx;
                   const atName = stations[fromIdx]?.stationName || '';
-                  statusDesc = hops === 0 ? '本站停靠' : `在 ${atName} 停靠`;
+                  statusDesc = hops === 0 ? '列车进站' : `在 ${atName} 停靠`;
                 }
               } else {
                 const effectiveToIdx = toIdx >= 0 ? toIdx : fromIdx;
@@ -1556,7 +1556,7 @@
                   hops = (targetIdx - effectiveToIdx) + 0.5;
                   const fromName = stations[effectiveFromIdx]?.stationName || '';
                   const toName = stations[effectiveToIdx]?.stationName || '';
-                  statusDesc = hops === 0.5 ? '列车进站' : `${fromName} ➔ ${toName}`;
+                  statusDesc = hops === 0.5 ? '即将到站' : `${fromName} ➔ ${toName}`;
                 }
               }
             }
@@ -1575,12 +1575,13 @@
           function formatTrainTime(item, defaultEmptyText = '等待发车') {
             if (!item) return { time: defaultEmptyText, sub: '' };
             if (item.hops === 0) {
-              return { time: '列车进站', sub: '本站停靠' };
+              return { time: '列车进站', sub: '' };
             }
             if (item.hops === 0.5) {
-              return { time: '列车进站', sub: '< 1 分钟' };
+              return { time: '即将到站', sub: '' };
             }
-            const minutes = Math.max(1, Math.round(item.hops * 2));
+            // 成都地铁平均旅速与站间运行时分约 1.2 分钟/站（对齐官方 2min/5min 耗时）
+            const minutes = Math.max(1, Math.round(item.hops * 1.2));
             const sub = `距 ${Math.ceil(item.hops)} 站 · ${item.statusDesc}`;
             return { time: `${minutes}min`, sub: sub };
           }
@@ -1627,8 +1628,40 @@
         if (!st) return;
         arrivalLoading.value = true;
 
-        // 1. 先用全线实时列车精准计算所有方向的到站信息（0延迟真实数据）
+        // 1. 先用全线在途列车计算基础拓扑方向和各车次
         const liveDirs = calculateArrivalFromLiveTrains(st, activeLine.value, trainsList.value);
+
+        // 2. 向官方接口获取首辆列车的精确秒级倒计时进行平滑校准（若可用）
+        try {
+          const res = await fetch(`/api/trains/nearby-station?lineNo=${currentLineNo.value}&stationNo=${st.stationNo}`);
+          const json = await res.json();
+
+          if (json.data && json.data.list && json.data.list.length > 0) {
+            json.data.list.forEach(item => {
+              const dirCode = item.direction;
+              const trains = item.trainList || [];
+              if (trains.length > 0 && trains[0]) {
+                const dur = trains[0].duration;
+                const targetDir = liveDirs.find(d => d.direction === dirCode);
+                if (targetDir && dur !== undefined && dur !== null) {
+                  if (dur <= 30) {
+                    targetDir.train1 = '列车进站';
+                    targetDir.train1Sub = '';
+                  } else if (dur <= 75) {
+                    targetDir.train1 = '即将到站';
+                    targetDir.train1Sub = '';
+                  } else {
+                    targetDir.train1 = Math.max(2, Math.round(dur / 60)) + 'min';
+                  }
+                }
+              }
+            });
+          }
+        } catch (e) {
+          console.warn('Official nearby-station calibrate error:', e);
+        }
+
+        // 3. 一次性赋值给响应式变量，杜绝先显示 3min 再瞬间跳变为 2min 的视觉闪烁跳变！
         if (liveDirs.length > 0) {
           stationArrivalDirections.value = liveDirs;
           if (preferredDir) {
@@ -1641,35 +1674,7 @@
           }
         }
 
-        // 2. 尝试向官方接口获取首辆列车的精确秒级倒计时进行校准
-        try {
-          const res = await fetch(`/api/trains/nearby-station?lineNo=${currentLineNo.value}&stationNo=${st.stationNo}`);
-          const json = await res.json();
-
-          if (json.data && json.data.list && json.data.list.length > 0) {
-            json.data.list.forEach(item => {
-              const dirCode = item.direction;
-              const trains = item.trainList || [];
-              if (trains.length > 0 && trains[0]) {
-                const dur = trains[0].duration;
-                const targetDir = stationArrivalDirections.value.find(d => d.direction === dirCode);
-                if (targetDir && dur !== undefined && dur !== null) {
-                  if (dur < 45) {
-                    targetDir.train1 = '列车进站';
-                    targetDir.train1Sub = '< 1 分钟';
-                  } else {
-                    targetDir.train1 = Math.max(1, Math.round(dur / 60)) + 'min';
-                    targetDir.train1Sub = `${Math.round(dur)}秒 · 官方校准`;
-                  }
-                }
-              }
-            });
-          }
-        } catch (e) {
-          console.warn('Official nearby-station calibrate error:', e);
-        } finally {
-          arrivalLoading.value = false;
-        }
+        arrivalLoading.value = false;
       }
 
       function switchLine(lineNo) {
