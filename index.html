@@ -845,6 +845,16 @@
       }
 
       async function fetchStations() {
+        // 优先加载本地/CDN静态站点库（毫秒级秒开，彻底避免跨国16秒请求）
+        try {
+          const res = await fetch('./data/stations_all.json');
+          const json = await res.json();
+          if (json.data && json.data.list) {
+            allLines.value = json.data.list;
+            return;
+          }
+        } catch (e) {}
+
         try {
           const res = await fetch('/api/stations');
           const json = await res.json();
@@ -852,13 +862,25 @@
             allLines.value = json.data.list;
           }
         } catch (e) {
-          const res = await fetch('./data/stations_all.json');
-          const json = await res.json();
-          allLines.value = json.data.list;
+          console.warn('Stations fetch error:', e);
         }
       }
 
       async function fetchDistances(lineNo) {
+        // 优先尝试本地站间距静态文件
+        try {
+          const res = await fetch(`./data/distances_${lineNo}.json`);
+          const json = await res.json();
+          const map = {};
+          if (json.data && Array.isArray(json.data)) {
+            json.data.forEach(item => {
+              map[`${item.startStation}_${item.endStation}`] = item.distance;
+            });
+            distancesMap.value = map;
+            return;
+          }
+        } catch (e) {}
+
         try {
           const res = await fetch(`/api/station-distance?lineNo=${lineNo}`);
           const json = await res.json();
@@ -870,19 +892,14 @@
           }
           distancesMap.value = map;
         } catch (e) {
-          try {
-            const res = await fetch(`./data/distances_${lineNo}.json`);
-            const json = await res.json();
-            const map = {};
-            json.data.forEach(item => {
-              map[`${item.startStation}_${item.endStation}`] = item.distance;
-            });
-            distancesMap.value = map;
-          } catch(err) {}
+          console.warn('Distance error:', e);
         }
       }
 
+      let isFetchingTrains = false;
       async function fetchTrainPositions(manual = false) {
+        if (isFetchingTrains && !manual) return;
+        isFetchingTrains = true;
         try {
           const res = await fetch(`/api/trains/all-locations?lineNo=${currentLineNo.value}`);
           const json = await res.json();
@@ -898,6 +915,8 @@
           }
         } catch (e) {
           console.warn('Live train location error:', e);
+        } finally {
+          isFetchingTrains = false;
         }
         if (manual) refreshCountdown.value = 5;
       }
