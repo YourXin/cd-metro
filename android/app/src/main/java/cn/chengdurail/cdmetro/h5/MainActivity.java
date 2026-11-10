@@ -5,13 +5,16 @@ import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.Window;
+import android.view.WindowInsets;
 import android.view.WindowManager;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.FrameLayout;
 import android.window.OnBackInvokedDispatcher;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
@@ -28,7 +31,7 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Immersive status bar with light icons
+        // Configure solid white status bar with dark icons (prevents header overlap)
         Window window = getWindow();
         window.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
         window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
@@ -37,8 +40,37 @@ public class MainActivity extends Activity {
             window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
         }
 
+        // Create root layout that reserves exact status bar height
+        FrameLayout rootLayout = new FrameLayout(this);
+        rootLayout.setBackgroundColor(Color.WHITE);
+
+        // Standard status bar height fallback
+        int resourceId = getResources().getIdentifier("status_bar_height", "dimen", "android");
+        int statusBarHeight = resourceId > 0 ? getResources().getDimensionPixelSize(resourceId) : 0;
+        rootLayout.setPadding(0, statusBarHeight, 0, 0);
+
+        // Dynamic WindowInsets listener for Android 11 ~ 16+ edge-to-edge
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT_WATCH) {
+            rootLayout.setOnApplyWindowInsetsListener((view, insets) -> {
+                int top = 0;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    top = insets.getInsets(WindowInsets.Type.statusBars()).top;
+                } else {
+                    top = insets.getSystemWindowInsetTop();
+                }
+                if (top > 0) {
+                    view.setPadding(0, top, 0, 0);
+                }
+                return insets;
+            });
+        }
+
         webView = new WebView(this);
-        setContentView(webView);
+        rootLayout.addView(webView, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+        ));
+        setContentView(rootLayout);
 
         // Android 13+ / 14 / 15 / 16 Predictive Back Gesture
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
