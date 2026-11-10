@@ -118,7 +118,7 @@
       </button>
     </div>
 
-    <!-- Quick Jump Chips (Customizable: Add / Delete with LocalStorage Persistence) -->
+    <!-- Quick Jump Chips: 快捷线 (Customizable: Add / Delete with LocalStorage Persistence) -->
     <div class="flex items-center space-x-1.5 mt-2 overflow-x-auto pb-0.5 text-[11px]">
       <span class="text-slate-400 font-medium shrink-0 text-[10px]">快捷线:</span>
       <span v-if="popularLines.length === 0" class="text-slate-400 text-[11px] shrink-0">默认未添加</span>
@@ -141,6 +141,40 @@
       >
         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
         <span>{{ popularLines.length === 0 ? '添加快捷线' : '自定义' }}</span>
+      </button>
+    </div>
+
+    <!-- Quick Stations Row: 快捷站 (指定 线路-站点，如 2号线-人民公园，点击直达并定位到站) -->
+    <div class="flex items-center space-x-1.5 mt-1.5 overflow-x-auto pb-0.5 text-[11px]">
+      <span class="text-slate-400 font-medium shrink-0 text-[10px]">快捷站:</span>
+      <span v-if="quickStations.length === 0" class="text-slate-400 text-[11px] shrink-0">默认未添加</span>
+      <button
+        v-for="st in quickStations"
+        :key="st.id"
+        @click="quickJumpToStation(st)"
+        class="px-2.5 py-0.5 rounded-full font-bold shrink-0 transition-all active:scale-95 border flex items-center space-x-1 group"
+        :class="currentLineNo === st.lineNo && selectedStation?.stationNo === st.stationNo && showArrivalModal
+          ? 'bg-amber-500 text-white border-amber-600 shadow-xs'
+          : 'bg-white text-slate-800 border-slate-200/90 hover:bg-slate-50'"
+        :title="'点击直达 ' + st.lineName + ' - ' + st.stationName"
+      >
+        <span class="w-2 h-2 rounded-full shrink-0" :style="{ backgroundColor: st.lineColor }"></span>
+        <span>{{ formatLineNumber(st.lineNo) }}号线·{{ st.stationName }}</span>
+        <span
+          @click.stop="removeQuickStation(st.id)"
+          class="text-slate-400 hover:text-rose-500 ml-1 text-xs leading-none"
+          title="删除此快捷站"
+        >✕</span>
+      </button>
+
+      <!-- Add Quick Station Button -->
+      <button
+        @click="openAddQuickStationModal"
+        class="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 hover:bg-amber-100 shrink-0 text-[11px] font-bold flex items-center space-x-0.5 border border-amber-200/80 active:scale-95 transition-all"
+        title="添加指定线路的指定站点"
+      >
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
+        <span>{{ quickStations.length === 0 ? '添加快捷站' : '添加' }}</span>
       </button>
     </div>
   </div>
@@ -240,8 +274,9 @@
 
           <!-- STATION ROW -->
           <div
+            :id="'station-row-' + st.stationNo"
             class="w-full flex items-center justify-between h-14 relative z-10 rounded-xl transition-all"
-            :class="selectedStation?.stationNo === st.stationNo ? 'bg-blue-50/40' : 'hover:bg-slate-50/30'"
+            :class="selectedStation?.stationNo === st.stationNo ? 'bg-blue-50/40 ring-2 ring-blue-300/50' : 'hover:bg-slate-50/30'"
           >
 
             <!-- LEFT RAIL: STATION DOCK POINT (Direction 01: 下行 / 往终点站) -->
@@ -448,11 +483,31 @@
           <div class="w-8"></div>
         </div>
 
-        <!-- CARD 1: 当前车站 & 刷新数据 -->
+        <!-- CARD 1: 当前车站 & 设为快捷站 & 刷新数据 -->
         <div class="bg-[#F8FAFC] rounded-2xl p-4 flex items-center justify-between border border-slate-100 mb-3.5 shadow-2xs">
           <div>
-            <div class="text-xs text-slate-400 font-medium">当前车站</div>
-            <div class="text-xl font-bold text-slate-900 mt-1 tracking-tight">{{ selectedStation.stationName }}</div>
+            <div class="text-xs text-slate-400 font-medium flex items-center space-x-1.5">
+              <span>当前车站</span>
+              <span
+                class="text-[10px] px-1.5 py-0.2 rounded font-semibold text-white shadow-2xs"
+                :style="{ backgroundColor: activeLine?.lineColor || '#EB5A35' }"
+              >
+                {{ formatLineNumber(currentLineNo) }}号线
+              </span>
+            </div>
+            <div class="text-xl font-bold text-slate-900 mt-1 tracking-tight flex items-center space-x-2">
+              <span>{{ selectedStation.stationName }}</span>
+              <button
+                @click="toggleQuickStation(currentLineNo, selectedStation)"
+                class="text-xs px-2.5 py-0.5 rounded-full flex items-center space-x-1 transition-all active:scale-95 border"
+                :class="isQuickStation(currentLineNo, selectedStation.stationNo)
+                  ? 'bg-amber-500 text-white border-amber-600 font-bold shadow-xs'
+                  : 'bg-white hover:bg-slate-100 text-slate-600 border-slate-200 font-medium'"
+                :title="isQuickStation(currentLineNo, selectedStation.stationNo) ? '已设为快捷站 (点击取消)' : '设为快捷站 (首页一键直达)'"
+              >
+                <span>{{ isQuickStation(currentLineNo, selectedStation.stationNo) ? '★ 已设快捷' : '☆ 设为快捷' }}</span>
+              </button>
+            </div>
           </div>
           <button
             @click="refreshArrivalData"
@@ -603,6 +658,103 @@
     </div>
   </div>
 
+  <!-- ==================== MODAL: ADD / MANAGE QUICK STATIONS (快捷站：指定 线路-站点，如 2号线-人民公园) ==================== -->
+  <div v-if="showAddQuickStationModal" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 backdrop-blur-xs" @click.self="showAddQuickStationModal = false">
+    <div class="bg-white w-full max-w-sm rounded-t-3xl sm:rounded-3xl p-5 shadow-2xl relative max-h-[85vh] flex flex-col bottom-sheet-anim">
+      <!-- Title Bar -->
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div>
+          <h3 class="font-bold text-slate-900 text-base">添加快捷站点</h3>
+          <p class="text-xs text-slate-400 mt-0.5">指定 线路-站点（如 2号线-人民公园），首页一键直达</p>
+        </div>
+        <button @click="showAddQuickStationModal = false" class="text-slate-400 hover:text-slate-600 p-1">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="py-3 overflow-y-auto flex-1 space-y-4">
+        <!-- Section 1: 已添加的快捷站点列表 -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-bold text-slate-700">已添加快捷站 (点击 ✕ 删除)</span>
+            <button @click="resetQuickStations" class="text-[11px] text-slate-400 hover:text-rose-600 font-medium">清空全部</button>
+          </div>
+          <div v-if="quickStations.length > 0" class="flex flex-wrap gap-2">
+            <div
+              v-for="st in quickStations"
+              :key="st.id"
+              class="inline-flex items-center space-x-1 pl-2.5 pr-1 py-1 rounded-full text-xs font-bold text-white shadow-xs"
+              :style="{ backgroundColor: st.lineColor }"
+            >
+              <span>{{ formatLineNumber(st.lineNo) }}号线·{{ st.stationName }}</span>
+              <button
+                @click.stop="removeQuickStation(st.id)"
+                class="w-4 h-4 rounded-full bg-black/20 hover:bg-black/40 flex items-center justify-center text-white ml-0.5 active:scale-90 transition-transform"
+                title="删除此快捷站"
+              >
+                <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            </div>
+          </div>
+          <div v-else class="text-xs text-slate-400 py-3 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
+            默认未添加快捷站，请从下方选择线路和站点点击 ＋ 添加
+          </div>
+        </div>
+
+        <!-- Section 2: 选择线路 (Line Tabs) -->
+        <div>
+          <span class="text-xs font-bold text-slate-700 block mb-2">第 1 步：选择线路</span>
+          <div class="flex space-x-2 overflow-x-auto pb-1 text-xs">
+            <button
+              v-for="line in allLines"
+              :key="line.lineNo"
+              @click="modalSelectedLineNo = line.lineNo"
+              class="px-2.5 py-1 rounded-lg font-bold shrink-0 transition-all border"
+              :class="modalSelectedLineNo === line.lineNo
+                ? 'text-white shadow-xs scale-105'
+                : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'"
+              :style="modalSelectedLineNo === line.lineNo ? { backgroundColor: line.lineColor, borderColor: line.lineColor } : {}"
+            >
+              {{ line.lineNameZh || (formatLineNumber(line.lineNo) + '号线') }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Section 3: 选择站点 (Stations Grid) -->
+        <div>
+          <span class="text-xs font-bold text-slate-700 block mb-2">
+            第 2 步：点击添加常用站点 ({{ formatLineNumber(modalSelectedLineNo) }}号线)
+          </span>
+          <div class="grid grid-cols-3 gap-2 max-h-48 overflow-y-auto pr-1">
+            <button
+              v-for="st in modalStationsList"
+              :key="st.stationNo"
+              @click="toggleQuickStation(modalSelectedLineNo, st)"
+              class="p-2 rounded-xl border text-xs flex items-center justify-between transition-all active:scale-95"
+              :class="isQuickStation(modalSelectedLineNo, st.stationNo)
+                ? 'bg-amber-50 border-amber-400 text-amber-800 font-bold shadow-xs'
+                : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-blue-50 hover:border-blue-300'"
+            >
+              <span class="truncate">{{ st.stationName }}</span>
+              <span class="text-xs ml-1 shrink-0 font-bold" :class="isQuickStation(modalSelectedLineNo, st.stationNo) ? 'text-amber-600' : 'text-slate-400'">
+                {{ isQuickStation(modalSelectedLineNo, st.stationNo) ? '✓' : '＋' }}
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="pt-3 border-t border-slate-100 flex items-center space-x-2">
+        <button
+          @click="showAddQuickStationModal = false"
+          class="flex-1 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold active:bg-blue-700 shadow-sm"
+        >
+          完成设置
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- ==================== MODAL: FULL LINE GRID SELECTOR ==================== -->
   <div v-if="showLineGridModal" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 backdrop-blur-xs">
     <div class="bg-white w-full max-w-sm rounded-t-3xl sm:rounded-3xl p-5 shadow-2xl relative max-h-[85vh] flex flex-col">
@@ -683,7 +835,7 @@
 </div>
 
 <script>
-  const { createApp, ref, computed, onMounted, onUnmounted } = Vue;
+  const { createApp, ref, computed, onMounted, onUnmounted, nextTick } = Vue;
 
   createApp({
     setup() {
@@ -703,6 +855,12 @@
       const defaultPopularLines = [];
       const popularLines = ref([]);
       const QUICK_LINES_STORAGE_KEY = 'cdmetro_custom_quick_lines_v2';
+
+      // Pinned / Quick Stations: 指定 线路-站点 (例如 2号线-人民公园，默认未添加)
+      const quickStations = ref([]);
+      const QUICK_STATIONS_STORAGE_KEY = 'cdmetro_custom_quick_stations_v1';
+      const showAddQuickStationModal = ref(false);
+      const modalSelectedLineNo = ref('02');
 
       const selectedTrain = ref(null);
       const selectedTrainStatus = ref('');
@@ -753,6 +911,96 @@
       function resetQuickLines() {
         popularLines.value = [];
         saveQuickLines();
+      }
+
+      // ==================== QUICK STATIONS LOGIC (线路-站点，如 2号线-人民公园) ====================
+      function loadSavedQuickStations() {
+        const saved = localStorage.getItem(QUICK_STATIONS_STORAGE_KEY);
+        if (saved !== null) {
+          try {
+            const arr = JSON.parse(saved);
+            if (Array.isArray(arr)) {
+              quickStations.value = arr;
+              return;
+            }
+          } catch (e) {}
+        }
+        quickStations.value = [];
+      }
+
+      function saveQuickStations() {
+        localStorage.setItem(QUICK_STATIONS_STORAGE_KEY, JSON.stringify(quickStations.value));
+      }
+
+      function isQuickStation(lineNo, stationNo) {
+        if (!lineNo || !stationNo) return false;
+        const id = `${normalizeLineNo(lineNo)}_${stationNo}`;
+        return quickStations.value.some(item => item.id === id);
+      }
+
+      function toggleQuickStation(lineNo, station) {
+        if (!station || !station.stationNo) return;
+        const normLine = normalizeLineNo(lineNo);
+        const id = `${normLine}_${station.stationNo}`;
+        const existingIdx = quickStations.value.findIndex(item => item.id === id);
+        if (existingIdx >= 0) {
+          quickStations.value.splice(existingIdx, 1);
+        } else {
+          const lObj = allLines.value.find(l => l.lineNo === normLine);
+          quickStations.value.push({
+            id: id,
+            lineNo: normLine,
+            lineName: lObj?.lineNameZh || `${formatLineNumber(normLine)}号线`,
+            stationNo: station.stationNo,
+            stationName: station.stationName,
+            lineColor: lObj?.lineColor || '#EB5A35'
+          });
+        }
+        saveQuickStations();
+      }
+
+      function removeQuickStation(id) {
+        quickStations.value = quickStations.value.filter(item => item.id !== id);
+        saveQuickStations();
+      }
+
+      function resetQuickStations() {
+        quickStations.value = [];
+        saveQuickStations();
+      }
+
+      const modalStationsList = computed(() => {
+        const line = allLines.value.find(l => l.lineNo === modalSelectedLineNo.value);
+        if (!line || !line.subLine) return [];
+        const sub = line.subLine.find(s => s.direction === '01') || line.subLine[0];
+        return sub ? sub.stationList : [];
+      });
+
+      function openAddQuickStationModal() {
+        modalSelectedLineNo.value = currentLineNo.value || '02';
+        showAddQuickStationModal.value = true;
+      }
+
+      async function quickJumpToStation(st) {
+        if (currentLineNo.value !== st.lineNo) {
+          currentLineNo.value = st.lineNo;
+          await fetchDistances(st.lineNo);
+          await fetchTrainPositions(true);
+        }
+        currentView.value = 'detail';
+        showAddQuickStationModal.value = false;
+
+        await nextTick();
+        const target = activeStations.value.find(s => s.stationNo === st.stationNo || s.stationName === st.stationName);
+        if (target) {
+          handleStationClick(target, '01');
+          setTimeout(() => {
+            const el = document.getElementById('station-row-' + target.stationNo);
+            if (el) {
+              el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+          }, 150);
+        }
       }
 
       const availableLinesToAdd = computed(() => {
@@ -1026,6 +1274,33 @@
         const val = quickInput.value.trim();
         if (!val) return;
 
+        // Check for format: "2-人民公园" or "2号线-人民公园" or "2 人民公园"
+        if (val.includes('-') || val.includes(' ') || val.includes('·')) {
+          const parts = val.split(/[- ·]+/);
+          if (parts.length >= 2) {
+            const lPart = normalizeLineNo(parts[0]);
+            const sPart = parts[1].trim();
+            const lObj = allLines.value.find(l => l.lineNo === lPart);
+            if (lObj && lObj.subLine) {
+              for (const sub of lObj.subLine) {
+                const found = sub.stationList?.find(s => s.stationName.includes(sPart) || s.stationNameZh?.includes(sPart));
+                if (found) {
+                  quickJumpToStation({
+                    id: `${lPart}_${found.stationNo}`,
+                    lineNo: lPart,
+                    lineName: lObj.lineNameZh || `${formatLineNumber(lPart)}号线`,
+                    stationNo: found.stationNo,
+                    stationName: found.stationName,
+                    lineColor: lObj.lineColor || '#EB5A35'
+                  });
+                  quickInput.value = '';
+                  return;
+                }
+              }
+            }
+          }
+        }
+
         const norm = normalizeLineNo(val);
         const match = allLines.value.find(l => l.lineNo === norm || l.lineNo === val);
         if (match) {
@@ -1039,7 +1314,14 @@
             for (const sub of line.subLine) {
               const st = sub.stationList?.find(s => s.stationName.includes(val) || s.stationNameZh?.includes(val));
               if (st) {
-                quickJumpTo(line.lineNo);
+                quickJumpToStation({
+                  id: `${line.lineNo}_${st.stationNo}`,
+                  lineNo: line.lineNo,
+                  lineName: line.lineNameZh || `${formatLineNumber(line.lineNo)}号线`,
+                  stationNo: st.stationNo,
+                  stationName: st.stationName,
+                  lineColor: line.lineColor || '#EB5A35'
+                });
                 quickInput.value = '';
                 return;
               }
@@ -1047,7 +1329,7 @@
           }
         }
 
-        alert(`未找到包含 "${val}" 的线路或站点，请尝试输入数字如 2 或 17`);
+        alert(`未找到包含 "${val}" 的线路或站点，请尝试输入数字如 2、17 或 "2-人民公园"`);
       }
 
       function selectLine(line) {
@@ -1080,6 +1362,7 @@
 
       onMounted(async () => {
         loadSavedQuickLines();
+        loadSavedQuickStations();
 
         const params = new URLSearchParams(window.location.search);
         const urlLine = params.get('line') || params.get('lineNo');
@@ -1113,6 +1396,16 @@
         showManageQuickLinesModal,
         popularLines,
         availableLinesToAdd,
+        quickStations,
+        showAddQuickStationModal,
+        modalSelectedLineNo,
+        modalStationsList,
+        openAddQuickStationModal,
+        quickJumpToStation,
+        isQuickStation,
+        toggleQuickStation,
+        removeQuickStation,
+        resetQuickStations,
         loading,
         allLines,
         currentLineNo,
