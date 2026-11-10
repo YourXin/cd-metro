@@ -8,11 +8,22 @@
   <script>if (!window.Vue) document.write('<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"><\/script>');</script>
   <script src="./tailwind.min.js"></script>
   <script>if (!window.tailwind) document.write('<script src="https://cdn.tailwindcss.com"><\/script>');</script>
+  <script>
+    if (navigator.userAgent.indexOf('CDMetroNative') !== -1) {
+      document.documentElement.classList.add('is-native-app');
+    }
+  </script>
   <style>
     /* Custom scrollbars and animations */
     ::-webkit-scrollbar { width: 0; height: 0; display: none; }
     * { -webkit-tap-highlight-color: transparent; }
     body { background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+
+    /* Compact header in native app to eliminate double status bar spacing */
+    .is-native-app header.app-header {
+      padding-top: 8px !important;
+      padding-bottom: 8px !important;
+    }
 
     /* Phone frame simulation on desktop */
     @media (min-width: 640px) {
@@ -59,8 +70,8 @@
 
   <!-- ==================== TOP NAVIGATION BAR ==================== -->
   <header
-    class="bg-white px-3.5 pb-2 flex items-center justify-between border-b border-slate-100 z-30 shrink-0 shadow-xs"
-    style="padding-top: max(12px, env(safe-area-inset-top));"
+    class="app-header bg-white px-3.5 flex items-center justify-between border-b border-slate-100 z-30 shrink-0 shadow-xs"
+    style="padding-top: max(8px, env(safe-area-inset-top)); padding-bottom: 8px;"
   >
     <div class="flex items-center space-x-2">
       <button @click="handleBack" class="w-8 h-8 flex items-center justify-center text-slate-700 active:scale-95 transition-transform rounded-full hover:bg-slate-100">

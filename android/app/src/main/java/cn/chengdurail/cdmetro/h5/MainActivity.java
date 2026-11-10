@@ -61,11 +61,36 @@ public class MainActivity extends Activity {
                 if (top > 0) {
                     view.setPadding(0, top, 0, 0);
                 }
-                return insets;
+                // Consume top inset so child WebView does not duplicate status bar padding
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    return insets.inset(0, top, 0, 0);
+                } else {
+                    return insets.replaceSystemWindowInsets(
+                            insets.getSystemWindowInsetLeft(),
+                            0,
+                            insets.getSystemWindowInsetRight(),
+                            insets.getSystemWindowInsetBottom()
+                    );
+                }
             });
         }
 
         webView = new WebView(this);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT_WATCH) {
+            webView.setOnApplyWindowInsetsListener((view, insets) -> {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    int top = insets.getInsets(WindowInsets.Type.statusBars()).top;
+                    return insets.inset(0, top, 0, 0);
+                } else {
+                    return insets.replaceSystemWindowInsets(
+                            insets.getSystemWindowInsetLeft(),
+                            0,
+                            insets.getSystemWindowInsetRight(),
+                            insets.getSystemWindowInsetBottom()
+                    );
+                }
+            });
+        }
         rootLayout.addView(webView, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
@@ -96,7 +121,7 @@ public class MainActivity extends Activity {
         settings.setAllowUniversalAccessFromFileURLs(true);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
-        settings.setUserAgentString(settings.getUserAgentString() + " CDMetroNative/1.0.1");
+        settings.setUserAgentString(settings.getUserAgentString() + " CDMetroNative/1.0.4");
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
