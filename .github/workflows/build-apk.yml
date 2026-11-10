@@ -35,31 +35,30 @@ jobs:
       - name: Prepare APK Artifact
         run: |
           mkdir -p build_output
-          cp android/app/build/outputs/apk/debug/app-debug.apk build_output/cdmetro-v1.0.2.apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk build_output/cdmetro-v1.0.3.apk
           ls -lh build_output/
 
       - name: Upload APK as Artifact
         uses: actions/upload-artifact@v4
         with:
           name: cdmetro-android-apk
-          path: build_output/cdmetro-v1.0.2.apk
+          path: build_output/cdmetro-v1.0.3.apk
           retention-days: 30
 
       - name: Create GitHub Release with APK
         uses: softprops/action-gh-release@v2
         if: github.ref == 'refs/heads/main'
         with:
-          tag_name: v1.0.2
-          name: 成都地铁实时位置安卓版 v1.0.2 (支持偏好设置与默认弹窗上次快捷站点)
+          tag_name: v1.0.3
+          name: 成都地铁实时位置安卓版 v1.0.3 (彻底修复到站时间估算与全线实时计算)
           body: |
-            ### 🚇 成都地铁实时列车位置与到站信息 安卓原生版 (v1.0.2)
+            ### 🚇 成都地铁实时列车位置与到站信息 安卓原生版 (v1.0.3)
 
-            - ⚙️ **新增快捷站点记忆与开关**：支持设置「启动默认弹窗上次使用的快捷站点」（如 2号线·人民公园），默认保持不启用，开启后打开应用秒级定位并展示到站时间。
-            - 🛠️ **新增偏好设置面板**：底部新增「偏好设置」入口，可查看当前记录的常用快捷站点与开关状态。
+            - ⏱️ **彻底重构到站时间算法（告别固定 1/5/7min）**：官方接口仅返回 1 辆列车甚至返回空，原代码有 1/5/7min 兜底；现升级为**全网 19 条线路基于全线在途列车物理位置与拓扑索引精准推算**，第一辆、第二辆、第三辆列车到站时间完全真实动态！
+            - 🚉 **新增到站距离与状态辅助信息**：每辆车显示实时区间（如 `距 2 站 · 白果林 ➔ 中医大`、`即将进站`、`本站停靠`），终点站或无车时真实提示 `始发站` / `等待发车`。
+            - ⚙️ **新增快捷站点记忆与开关**：支持设置「启动默认弹窗上次使用的快捷站点」，默认保持不启用。
             - 🎨 **修复状态栏重叠**：动态接入 WindowInsets，时钟与状态栏完全下移居中，不遮挡标题。
             - ⚡ **全网 19 条线路本地极速缓存**：站点与站间距 0ms 秒开，彻底消灭白屏与等待。
-            - 🚀 **原生 50ms 直连**：绕过浏览器跨域限制，手机直连官方成都地铁数据中心。
-            - 📱 **适配 Android 15 & 16**：TargetSdk 35，适配 16KB 内存分页与预测性返回手势。
-          files: build_output/cdmetro-v1.0.2.apk
+          files: build_output/cdmetro-v1.0.3.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
