@@ -40,32 +40,29 @@ jobs:
       - name: Prepare APK Artifact
         run: |
           mkdir -p build_output
-          cp android/app/build/outputs/apk/debug/app-debug.apk build_output/cdmetro-v1.0.6.apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk build_output/cdmetro-v1.0.7.apk
           ls -lh build_output/
 
       - name: Upload APK as Artifact
         uses: actions/upload-artifact@v4
         with:
           name: cdmetro-android-apk
-          path: build_output/cdmetro-v1.0.6.apk
+          path: build_output/cdmetro-v1.0.7.apk
           retention-days: 30
 
       - name: Create GitHub Release with APK
         uses: softprops/action-gh-release@v2
         if: github.ref == 'refs/heads/main'
         with:
-          tag_name: v1.0.6
-          name: 成都地铁实时位置安卓版 v1.0.6 (对齐官方到站时段逻辑与平滑无跳变刷新)
+          tag_name: v1.0.7
+          name: 成都地铁实时位置安卓版 v1.0.7 (增加到站校准超时熔断与弱网秒级兜底)
           body: |
-            ### 🚇 成都地铁实时列车位置与到站信息 安卓原生版 (v1.0.6)
+            ### 🚇 成都地铁实时列车位置与到站信息 安卓原生版 (v1.0.7)
 
-            - ⏱️ **彻底解决 3min 瞬间跳变为 2min 的视觉闪烁**：将粗放的每站 2 分钟调整为真实运营时分 1.2 分钟，并在弹窗拉取时采用原子合并校准，一次性渲染，彻底消除数字闪烁跳变。
-            - 🚉 **100% 对齐官方「即将到站」与「列车进站」三阶段流转**：
-              - 0.5 站 / 约 60 秒（区间开向本站中）：显示 **「即将到站」**；
-              - 0 站 / 0 秒（车头进站/站台停靠）：显示 **「列车进站」**；
-              - 1 站及以上：精准测算 **`n min`**（消灭偏大 1 倍问题）。
-            - 🔋 **后台 0 耗电与前台即时唤醒**：锁屏与切出后台彻底挂起定时器，切回即刻刷新。
-            - 🎨 **状态栏紧凑居中布局**：标准 Material 高度无冗余空白。
-          files: build_output/cdmetro-v1.0.6.apk
+            - 🛡️ **到站校准接口增加 3.5 秒 AbortController 超时熔断**：在隧道、地下弱网或官方接口偶发抖动无响应时，3.5 秒内自动安全熔断，立即以本地 1.2 分钟高精拓扑模型秒级兜底渲染，彻底杜绝转圈卡死。
+            - ⏱️ **平滑无跳变渲染**：彻底消灭 3min ➔ 2min 的中间状态闪烁。
+            - 🚉 **100% 对齐官方到站流转**：0.5 站「即将到站」，0 站「列车进站」，长途「n min」。
+            - 🔋 **前后台智能休眠与即时唤醒**：锁屏挂起 0 耗电，切回瞬间自动刷新。
+          files: build_output/cdmetro-v1.0.7.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

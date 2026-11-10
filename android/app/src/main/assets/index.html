@@ -1632,8 +1632,15 @@
         const liveDirs = calculateArrivalFromLiveTrains(st, activeLine.value, trainsList.value);
 
         // 2. 向官方接口获取首辆列车的精确秒级倒计时进行平滑校准（若可用）
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3500); // 3.5秒软超时熔断，弱网与隧道断网时秒级兜底
+
         try {
-          const res = await fetch(`/api/trains/nearby-station?lineNo=${currentLineNo.value}&stationNo=${st.stationNo}`);
+          const res = await fetch(`/api/trains/nearby-station?lineNo=${currentLineNo.value}&stationNo=${st.stationNo}`, {
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+          if (!res.ok) throw new Error('HTTP ' + res.status);
           const json = await res.json();
 
           if (json.data && json.data.list && json.data.list.length > 0) {
@@ -1659,6 +1666,8 @@
           }
         } catch (e) {
           console.warn('Official nearby-station calibrate error:', e);
+        } finally {
+          clearTimeout(timeoutId);
         }
 
         // 3. 一次性赋值给响应式变量，杜绝先显示 3min 再瞬间跳变为 2min 的视觉闪烁跳变！
