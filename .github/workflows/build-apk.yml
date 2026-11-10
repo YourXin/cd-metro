@@ -35,29 +35,29 @@ jobs:
       - name: Prepare APK Artifact
         run: |
           mkdir -p build_output
-          cp android/app/build/outputs/apk/debug/app-debug.apk build_output/cdmetro-v1.0.0.apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk build_output/cdmetro-v1.0.1.apk
           ls -lh build_output/
 
       - name: Upload APK as Artifact
         uses: actions/upload-artifact@v4
         with:
           name: cdmetro-android-apk
-          path: build_output/cdmetro-v1.0.0.apk
+          path: build_output/cdmetro-v1.0.1.apk
           retention-days: 30
 
       - name: Create GitHub Release with APK
         uses: softprops/action-gh-release@v2
         if: github.ref == 'refs/heads/main'
         with:
-          tag_name: v1.0.0
-          name: 成都地铁实时位置安卓版 v1.0.0 (支持安卓15与16)
+          tag_name: v1.0.1
+          name: 成都地铁实时位置安卓版 v1.0.1 (修复状态栏与完全本地缓存)
           body: |
-            ### 🚇 成都地铁实时列车位置与到站信息 安卓原生版 (v1.0.0)
+            ### 🚇 成都地铁实时列车位置与到站信息 安卓原生版 (v1.0.1)
 
-            - 🚀 **完美支持 Android 15 & Android 16+**：TargetSdk 35，适配预测性返回手势与 16KB 内存分页！
-            - ⚡ **极速 50ms 响应**：绕过浏览器 CORS 跨域限制，手机直连成都地铁官方数据中心！
-            - 📦 **轻量极简**：APK 仅约 2MB，零三方冗余库，不申请任何敏感权限。
-            - 📱 **桌面独立图标**：完美支持安卓桌面快捷方式。
-          files: build_output/cdmetro-v1.0.0.apk
+            - 🎨 **修复状态栏重叠**：动态接入 WindowInsets，时钟与状态栏完全下移居中，不遮挡标题。
+            - ⚡ **全网 19 条线路本地极速缓存**：站点与站间距 0ms 秒开，彻底消灭白屏与等待。
+            - 🚀 **原生 50ms 直连**：绕过浏览器跨域限制，手机直连官方成都地铁数据中心。
+            - 📱 **适配 Android 15 & 16**：TargetSdk 35，适配 16KB 内存分页与预测性返回手势。
+          files: build_output/cdmetro-v1.0.1.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
