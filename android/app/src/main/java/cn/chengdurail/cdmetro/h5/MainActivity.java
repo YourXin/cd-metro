@@ -12,6 +12,7 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.window.OnBackInvokedDispatcher;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -38,6 +39,20 @@ public class MainActivity extends Activity {
         webView = new WebView(this);
         setContentView(webView);
 
+        // Android 13+ / 14 / 15 / 16 Predictive Back Gesture
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+                () -> {
+                    if (webView != null && webView.canGoBack()) {
+                        webView.goBack();
+                    } else {
+                        finish();
+                    }
+                }
+            );
+        }
+
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
@@ -59,7 +74,7 @@ public class MainActivity extends Activity {
                 if (urlStr.contains("/api/")) {
                     try {
                         int apiIdx = urlStr.indexOf("/api/");
-                        String apiSubPath = urlStr.substring(apiIdx + 5); // strip "/api/"
+                        String apiSubPath = urlStr.substring(apiIdx + 5);
                         String targetUrl = "https://app.cdmetro.chengdurail.cn/op/" + apiSubPath;
 
                         URL target = new URL(targetUrl);
@@ -68,7 +83,7 @@ public class MainActivity extends Activity {
                         conn.setConnectTimeout(8000);
                         conn.setReadTimeout(8000);
                         conn.setRequestProperty("Accept", "application/json");
-                        conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36");
+                        conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36");
 
                         int statusCode = conn.getResponseCode();
                         InputStream stream = statusCode < 400 ? conn.getInputStream() : conn.getErrorStream();

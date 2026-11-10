@@ -22,13 +22,10 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Setup Gradle 8.2
+      - name: Setup Gradle 8.5
         uses: gradle/actions/setup-gradle@v3
         with:
-          gradle-version: '8.2'
+          gradle-version: '8.5'
 
       - name: Build Android APK
         working-directory: ./android
@@ -53,14 +50,14 @@ jobs:
         if: github.ref == 'refs/heads/main'
         with:
           tag_name: v1.0.0
-          name: 成都地铁实时位置安卓版 v1.0.0
+          name: 成都地铁实时位置安卓版 v1.0.0 (支持安卓15与16)
           body: |
             ### 🚇 成都地铁实时列车位置与到站信息 安卓原生版 (v1.0.0)
 
-            - 🚀 **极速 50ms 响应**：绕过浏览器 CORS 跨域限制，手机直接直连成都地铁官方数据中心！
-            - ⚡ **秒开零延迟**：完整 UI 内置于 APK 本地 assets，离线秒开，全屏沉浸无地址栏。
+            - 🚀 **完美支持 Android 15 & Android 16+**：TargetSdk 35，适配预测性返回手势与 16KB 内存分页！
+            - ⚡ **极速 50ms 响应**：绕过浏览器 CORS 跨域限制，手机直连成都地铁官方数据中心！
+            - 📦 **轻量极简**：APK 仅约 2MB，零三方冗余库，不申请任何敏感权限。
             - 📱 **桌面独立图标**：完美支持安卓桌面快捷方式。
-            - 🔄 **实时在途追踪**：5秒轮询刷新，支持下行/上行双向列车停靠与区间运行展示。
           files: build_output/cdmetro-v1.0.0.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
