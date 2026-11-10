@@ -22,6 +22,7 @@ import java.util.Map;
 public class MainActivity extends Activity {
 
     private WebView webView;
+    private static final String APP_ORIGIN = "https://cdmetro.app";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -70,12 +71,17 @@ public class MainActivity extends Activity {
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                 String urlStr = request.getUrl().toString();
 
-                // Intercept any /api/ requests and forward directly to official Chengdu Metro server natively!
-                if (urlStr.contains("/api/")) {
+                // 1. Intercept API requests -> Forward directly to Official Chengdu Metro API natively (0 CORS, 50ms)
+                if (urlStr.contains("/api/") || urlStr.contains("app.cdmetro.chengdurail.cn/op/")) {
                     try {
-                        int apiIdx = urlStr.indexOf("/api/");
-                        String apiSubPath = urlStr.substring(apiIdx + 5);
-                        String targetUrl = "https://app.cdmetro.chengdurail.cn/op/" + apiSubPath;
+                        String targetUrl;
+                        if (urlStr.contains("app.cdmetro.chengdurail.cn/op/")) {
+                            targetUrl = urlStr;
+                        } else {
+                            int apiIdx = urlStr.indexOf("/api/");
+                            String apiSubPath = urlStr.substring(apiIdx + 5);
+                            targetUrl = "https://app.cdmetro.chengdurail.cn/op/" + apiSubPath;
+                        }
 
                         URL target = new URL(targetUrl);
                         HttpURLConnection conn = (HttpURLConnection) target.openConnection();
@@ -105,12 +111,36 @@ public class MainActivity extends Activity {
                         e.printStackTrace();
                     }
                 }
+
+                // 2. Intercept local assets from https://cdmetro.app/* (zero network, instant offline loading)
+                if (urlStr.startsWith(APP_ORIGIN)) {
+                    String path = urlStr.substring(APP_ORIGIN.length());
+                    if (path.startsWith("/")) path = path.substring(1);
+                    if (path.isEmpty() || path.startsWith("?")) path = "index.html";
+                    if (path.contains("?")) path = path.substring(0, path.indexOf("?"));
+
+                    try {
+                        InputStream is = getAssets().open(path);
+                        String mime = "text/html";
+                        if (path.endsWith(".json")) mime = "application/json";
+                        else if (path.endsWith(".js")) mime = "application/javascript";
+                        else if (path.endsWith(".css")) mime = "text/css";
+                        else if (path.endsWith(".png")) mime = "image/png";
+
+                        Map<String, String> headers = new HashMap<>();
+                        headers.put("Access-Control-Allow-Origin", "*");
+                        return new WebResourceResponse(mime, "UTF-8", 200, "OK", headers, is);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+
                 return super.shouldInterceptRequest(view, request);
             }
         });
 
-        // Load local assets directly - zero network latency for UI loading!
-        webView.loadUrl("file:///android_asset/index.html");
+        // Load through virtual HTTPS domain so fetch() and all modern browser APIs work flawlessly!
+        webView.loadUrl(APP_ORIGIN + "/index.html");
     }
 
     @Override
