@@ -1,0 +1,1135 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>成都地铁 - 列车位置实时查询</title>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* Custom scrollbars and animations */
+    ::-webkit-scrollbar { width: 0; height: 0; display: none; }
+    * { -webkit-tap-highlight-color: transparent; }
+    body { background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+
+    /* Phone frame simulation on desktop */
+    @media (min-width: 640px) {
+      .app-wrapper {
+        max-width: 440px;
+        height: 900px;
+        margin: 20px auto;
+        border-radius: 40px;
+        box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.3), 0 0 0 10px #1e293b;
+        overflow: hidden;
+        border: 4px solid #334155;
+      }
+    }
+    @media (max-width: 639px) {
+      .app-wrapper {
+        width: 100vw;
+        height: 100vh;
+        border-radius: 0;
+      }
+    }
+
+    /* Track Pulse and Train Animations */
+    @keyframes trainPulse {
+      0%, 100% { transform: scale(1); filter: drop-shadow(0 2px 4px rgba(27, 100, 242, 0.4)); }
+      50% { transform: scale(1.12); filter: drop-shadow(0 3px 8px rgba(27, 100, 242, 0.7)); }
+    }
+    .train-badge {
+      animation: trainPulse 2.4s infinite ease-in-out;
+    }
+
+    /* Slide up bottom sheet animation */
+    @keyframes slideUp {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
+    .bottom-sheet-anim {
+      animation: slideUp 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+  </style>
+</head>
+<body class="flex items-center justify-center min-h-screen text-slate-800 antialiased select-none">
+
+<div id="app" class="app-wrapper flex flex-col bg-[#F7F9FC] relative overflow-hidden">
+
+  <!-- ==================== TOP NAVIGATION BAR ==================== -->
+  <header class="bg-white px-3.5 pt-3 pb-2 flex items-center justify-between border-b border-slate-100 z-30 shrink-0 shadow-xs">
+    <div class="flex items-center space-x-2">
+      <button @click="handleBack" class="w-8 h-8 flex items-center justify-center text-slate-700 active:scale-95 transition-transform rounded-full hover:bg-slate-100">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/>
+        </svg>
+      </button>
+      <div>
+        <h1 class="text-[17px] font-bold text-slate-900 tracking-wide flex items-center space-x-1.5">
+          <span>列车位置</span>
+          <span
+            v-if="activeLine"
+            class="text-xs px-2 py-0.5 rounded-full text-white font-semibold shadow-xs"
+            :style="{ backgroundColor: activeLine.lineColor }"
+          >
+            {{ activeLine.lineNameZh || activeLine.lineName }}
+          </span>
+        </h1>
+      </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="flex items-center space-x-1.5">
+      <button
+        @click="showLineGridModal = true"
+        class="text-xs px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-600 font-bold flex items-center space-x-1 active:bg-blue-100 transition-colors"
+      >
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+        </svg>
+        <span>查全线</span>
+      </button>
+      <button
+        @click="toggleView"
+        class="text-xs px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-700 font-medium active:bg-slate-200 transition-colors"
+      >
+        {{ currentView === 'list' ? '返回详情' : '线路列表' }}
+      </button>
+    </div>
+  </header>
+
+  <!-- ==================== QUICK SEARCH & CUSTOMIZABLE POPULAR LINE CHIPS ==================== -->
+  <div class="bg-white px-3.5 py-2 border-b border-slate-100 shrink-0 z-20">
+    <div class="relative flex items-center">
+      <input
+        v-model="quickInput"
+        @keyup.enter="handleQuickSubmit"
+        type="text"
+        placeholder="输入数字如 2, 17 或站点名直达..."
+        class="w-full bg-slate-100/90 hover:bg-slate-100 focus:bg-white pl-8 pr-16 py-1.5 rounded-xl text-xs border border-transparent focus:border-blue-500 focus:outline-none transition-all shadow-inner"
+      >
+      <svg class="w-3.5 h-3.5 text-slate-400 absolute left-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+      </svg>
+      <button
+        @click="handleQuickSubmit"
+        class="absolute right-1 px-2.5 py-1 text-[11px] bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-xs active:scale-95 transition-all"
+      >
+        直达
+      </button>
+    </div>
+
+    <!-- Quick Jump Chips (Customizable: Add / Delete with LocalStorage Persistence) -->
+    <div class="flex items-center space-x-1.5 mt-2 overflow-x-auto pb-0.5 text-[11px]">
+      <span class="text-slate-400 font-medium shrink-0 text-[10px]">快捷线:</span>
+      <button
+        v-for="no in popularLines"
+        :key="no"
+        @click="quickJumpTo(no)"
+        class="px-2.5 py-0.5 rounded-full font-bold shrink-0 transition-all active:scale-95 border"
+        :class="currentLineNo === normalizeLineNo(no) ? 'text-white shadow-xs' : 'bg-slate-50 text-slate-700 border-slate-200/80 hover:bg-slate-100'"
+        :style="currentLineNo === normalizeLineNo(no) ? { backgroundColor: getLineColor(no), borderColor: getLineColor(no) } : {}"
+      >
+        {{ no }}号线
+      </button>
+
+      <!-- Manage / Add Custom Quick Lines Button -->
+      <button
+        @click="showManageQuickLinesModal = true"
+        class="px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 shrink-0 text-[11px] font-bold flex items-center space-x-0.5 border border-blue-200/70 active:scale-95 transition-all"
+        title="自定义添加或删除快捷线"
+      >
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
+        <span>自定义</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ==================== VIEW 1: LINE SELECTION LIST ==================== -->
+  <main v-if="currentView === 'list'" class="flex-1 overflow-y-auto px-4 py-3 bg-[#F7F9FC]">
+    <div class="space-y-2.5 pb-6">
+      <div
+        v-for="line in filteredLines"
+        :key="line.lineNo"
+        @click="selectLine(line)"
+        class="bg-white p-3.5 rounded-2xl flex items-center justify-between shadow-xs active:bg-slate-50 transition-all border border-slate-100 cursor-pointer"
+      >
+        <div class="flex items-center space-x-3.5">
+          <div
+            class="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-base shadow-xs shrink-0"
+            :style="{ backgroundColor: line.lineColor }"
+          >
+            {{ formatLineNumber(line.lineNo) }}
+          </div>
+          <div>
+            <div class="font-bold text-slate-800 text-[15px] flex items-center space-x-2">
+              <span :style="{ color: line.lineColor }">{{ line.lineNameZh || line.lineName }}</span>
+              <span v-if="line.lineNo === currentLineNo" class="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded font-normal">当前线路</span>
+            </div>
+            <div class="text-xs text-slate-500 mt-0.5 tracking-tight">
+              {{ getLineTerminus(line) }}
+            </div>
+          </div>
+        </div>
+        <svg class="w-5 h-5 text-slate-300 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+        </svg>
+      </div>
+    </div>
+  </main>
+
+  <!-- ==================== VIEW 2: TRAIN POSITION DETAIL ==================== -->
+  <main v-else class="flex-1 flex flex-col overflow-hidden bg-[#F7F9FC] relative">
+
+    <!-- Horizontal Tabs for All Lines -->
+    <div class="bg-white px-3 border-b border-slate-100 overflow-x-auto flex space-x-6 shrink-0 py-2 text-sm font-medium">
+      <div
+        v-for="line in allLines"
+        :key="line.lineNo"
+        @click="switchLine(line.lineNo)"
+        class="relative cursor-pointer py-1 px-0.5 shrink-0 transition-colors whitespace-nowrap"
+        :class="currentLineNo === line.lineNo ? 'font-bold text-slate-900 scale-105' : 'text-slate-500 hover:text-slate-700'"
+      >
+        {{ line.lineNameZh || line.lineName }}
+        <div
+          v-if="currentLineNo === line.lineNo"
+          class="absolute bottom-0 left-0 right-0 h-[3px] rounded-full transition-all"
+          :style="{ backgroundColor: line.lineColor || '#EB5A35' }"
+        ></div>
+      </div>
+    </div>
+
+    <!-- Sub-header bar: Theme train tag & Live status -->
+    <div class="px-3.5 py-2 flex items-center justify-between text-xs bg-white/70 backdrop-blur-xs border-b border-slate-100 shrink-0">
+      <div class="flex items-center space-x-1.5 text-slate-600">
+        <div class="w-3.5 h-3.5 grid grid-cols-2 gap-0.5 rotate-45 shrink-0">
+          <div class="bg-amber-400 rounded-xs"></div>
+          <div class="bg-blue-500 rounded-xs"></div>
+          <div class="bg-emerald-500 rounded-xs"></div>
+          <div class="bg-rose-500 rounded-xs"></div>
+        </div>
+        <span class="font-medium text-slate-700">主题列车</span>
+      </div>
+
+      <div class="flex items-center space-x-2">
+        <span class="inline-flex items-center text-[11px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full font-medium">
+          <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full mr-1.5 animate-pulse"></span>
+          {{ refreshCountdown }}s 刷新 ({{ totalTrains }}列在途)
+        </span>
+        <button @click="fetchTrainPositions(true)" class="text-blue-600 text-xs font-semibold active:scale-95" title="点击立即刷新">
+          刷新
+        </button>
+      </div>
+    </div>
+
+    <!-- Vertical Railway Tracks Container -->
+    <div ref="trackContainer" class="flex-1 overflow-y-auto px-2 py-4 relative">
+      <div v-if="loading" class="flex flex-col items-center justify-center py-24 text-slate-400">
+        <div class="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin mb-3"></div>
+        <p class="text-xs">加载 {{ activeLine?.lineNameZh || activeLine?.lineName }} 实时列车位置中...</p>
+      </div>
+
+      <div v-else class="relative max-w-sm mx-auto pb-8">
+
+        <!-- ==================== STATIONS LIST ==================== -->
+        <div
+          v-for="(st, idx) in activeStations"
+          :key="st.stationNo"
+          class="relative flex flex-col items-center"
+        >
+
+          <!-- STATION ROW -->
+          <div
+            class="w-full flex items-center justify-between h-14 relative z-10 rounded-xl transition-all"
+            :class="selectedStation?.stationNo === st.stationNo ? 'bg-blue-50/40' : 'hover:bg-slate-50/30'"
+          >
+
+            <!-- LEFT RAIL: STATION DOCK POINT (Direction 01: 下行 / 往终点站) -->
+            <div
+              @click.stop="handleStationClick(st, '01')"
+              class="w-16 flex items-center justify-center relative cursor-pointer group py-2"
+              title="点击查看左侧下行到站信息"
+            >
+              <!-- Left Track Line (Background) -->
+              <div
+                class="absolute inset-y-0 w-2.5 rounded-xs"
+                :style="{ backgroundColor: activeLine?.lineColor || '#EB5A35' }"
+              ></div>
+
+              <!-- Station Dot on Left Track (Active when selected & direction 01) -->
+              <div
+                class="w-4 h-4 rounded-full transition-all duration-200 z-10 flex items-center justify-center"
+                :class="selectedStation?.stationNo === st.stationNo && activeArrivalDir === '01'
+                  ? 'bg-blue-600 ring-4 ring-blue-300 shadow-md scale-125'
+                  : selectedStation?.stationNo === st.stationNo
+                    ? 'bg-blue-600 ring-2 ring-blue-300 scale-110'
+                    : 'bg-white border-[2.5px] border-slate-300 shadow-xs group-hover:border-blue-400 group-hover:scale-110'"
+              >
+                <div v-if="selectedStation?.stationNo === st.stationNo" class="w-1.5 h-1.5 rounded-full bg-white"></div>
+              </div>
+
+              <!-- TRAIN DOCKED AT LEFT STATION (Down Direction: 01) -->
+              <div
+                v-if="getDockedTrain(st.stationNo, '01')"
+                @click.stop="openTrainModal(getDockedTrain(st.stationNo, '01'), st, '停靠中 (下行)')"
+                class="absolute right-9 z-20 flex items-center cursor-pointer train-badge"
+              >
+                <div class="w-7 h-7 rounded-full bg-[#1B64F2] text-white flex items-center justify-center shadow-md border-2 border-white">
+                  <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M4 15.5C4 17.43 5.57 19 7.5 19L6 20.5V21H18V20.5L16.5 19C18.43 19 20 17.43 20 15.5V5C20 2.5 17.5 2 12 2C6.5 2 4 2.5 4 5V15.5ZM12 4C17.5 4 18 4.3 18 6V11H6V6C6 4.3 6.5 4 12 4ZM6 13H18V15.5C18 16.33 17.33 17 16.5 17H7.5C6.67 17 6 16.33 6 15.5V13ZM8.5 16C9.33 16 10 15.33 10 14.5C10 13.67 9.33 13 8.5 13C7.67 13 7 13.67 7 14.5C7 15.33 7.67 16 8.5 16ZM15.5 16C16.33 16 17 15.33 17 14.5C17 13.67 16.33 13 15.5 13C14.67 13 14 13.67 14 14.5C14 15.33 14.67 16 15.5 16Z"/>
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            <!-- CENTER: STATION NAME & CODE (Click uses current active direction) -->
+            <div
+              @click="handleStationClick(st, activeArrivalDir || '01')"
+              class="flex-1 flex flex-col items-center justify-center px-2 cursor-pointer active:opacity-70"
+            >
+              <span
+                class="font-bold text-[15px] tracking-wide transition-colors"
+                :class="selectedStation?.stationNo === st.stationNo ? 'text-blue-600 font-extrabold scale-105' : 'text-slate-800'"
+              >
+                {{ st.stationName }}
+              </span>
+              <div
+                class="mt-0.5 inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-white shadow-xs"
+                :style="{ borderColor: activeLine?.lineColor || '#EB5A35', color: activeLine?.lineColor || '#EB5A35' }"
+              >
+                <span>{{ currentLineNo }}</span>
+                <span class="mx-1 opacity-40">|</span>
+                <span>{{ String(st.stationSeq || (idx + 1)).padStart(2, '0') }}</span>
+              </div>
+            </div>
+
+            <!-- RIGHT RAIL: STATION DOCK POINT (Direction 02: 上行 / 往起点站) -->
+            <div
+              @click.stop="handleStationClick(st, '02')"
+              class="w-16 flex items-center justify-center relative cursor-pointer group py-2"
+              title="点击查看右侧上行到站信息"
+            >
+              <!-- Right Track Line (Background) -->
+              <div
+                class="absolute inset-y-0 w-2.5 rounded-xs"
+                :style="{ backgroundColor: activeLine?.lineColor || '#EB5A35' }"
+              ></div>
+
+              <!-- Station Dot on Right Track (Active when selected & direction 02) -->
+              <div
+                class="w-4 h-4 rounded-full transition-all duration-200 z-10 flex items-center justify-center"
+                :class="selectedStation?.stationNo === st.stationNo && activeArrivalDir === '02'
+                  ? 'bg-blue-600 ring-4 ring-blue-300 shadow-md scale-125'
+                  : selectedStation?.stationNo === st.stationNo
+                    ? 'bg-blue-600 ring-2 ring-blue-300 scale-110'
+                    : 'bg-white border-[2.5px] border-slate-300 shadow-xs group-hover:border-blue-400 group-hover:scale-110'"
+              >
+                <div v-if="selectedStation?.stationNo === st.stationNo" class="w-1.5 h-1.5 rounded-full bg-white"></div>
+              </div>
+
+              <!-- TRAIN DOCKED AT RIGHT STATION (Up Direction: 02) -->
+              <div
+                v-if="getDockedTrain(st.stationNo, '02')"
+                @click.stop="openTrainModal(getDockedTrain(st.stationNo, '02'), st, '停靠中 (上行)')"
+                class="absolute left-9 z-20 flex items-center cursor-pointer train-badge"
+              >
+                <div class="w-7 h-7 rounded-full bg-[#1B64F2] text-white flex items-center justify-center shadow-md border-2 border-white">
+                  <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M4 15.5C4 17.43 5.57 19 7.5 19L6 20.5V21H18V20.5L16.5 19C18.43 19 20 17.43 20 15.5V5C20 2.5 17.5 2 12 2C6.5 2 4 2.5 4 5V15.5ZM12 4C17.5 4 18 4.3 18 6V11H6V6C6 4.3 6.5 4 12 4ZM6 13H18V15.5C18 16.33 17.33 17 16.5 17H7.5C6.67 17 6 16.33 6 15.5V13ZM8.5 16C9.33 16 10 15.33 10 14.5C10 13.67 9.33 13 8.5 13C7.67 13 7 13.67 7 14.5C7 15.33 7.67 16 8.5 16ZM15.5 16C16.33 16 17 15.33 17 14.5C17 13.67 16.33 13 15.5 13C14.67 13 14 13.67 14 14.5C14 15.33 14.67 16 15.5 16Z"/>
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- ==================== TRACK SECTION BETWEEN STATIONS ==================== -->
+          <div
+            v-if="idx < activeStations.length - 1"
+            class="w-full flex items-center justify-between h-16 relative"
+          >
+
+            <!-- LEFT RAIL SEGMENT (DOWN ⬇) -->
+            <div
+              @click.stop="handleStationClick(st, '01')"
+              class="w-16 h-full flex items-center justify-center relative cursor-pointer"
+              title="查看左侧下行方向到站"
+            >
+              <div
+                class="w-2.5 h-full relative overflow-hidden flex flex-col items-center justify-around py-1"
+                :style="{ backgroundColor: activeLine?.lineColor || '#EB5A35' }"
+              >
+                <span class="text-white/80 text-[10px] leading-none">▼</span>
+                <span class="text-white/80 text-[10px] leading-none">▼</span>
+                <span class="text-white/80 text-[10px] leading-none">▼</span>
+              </div>
+
+              <!-- MOVING TRAIN ON LEFT TRACK (Direction 01) -->
+              <div
+                v-if="getTransitTrain(st.stationNo, activeStations[idx+1]?.stationNo, '01')"
+                @click.stop="openTrainModal(getTransitTrain(st.stationNo, activeStations[idx+1]?.stationNo, '01'), st, '运行中 (下行)')"
+                class="absolute right-9 z-20 flex items-center cursor-pointer train-badge"
+              >
+                <div class="w-7 h-7 rounded-full bg-[#1B64F2] text-white flex items-center justify-center shadow-md border-2 border-white relative">
+                  <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M4 15.5C4 17.43 5.57 19 7.5 19L6 20.5V21H18V20.5L16.5 19C18.43 19 20 17.43 20 15.5V5C20 2.5 17.5 2 12 2C6.5 2 4 2.5 4 5V15.5ZM12 4C17.5 4 18 4.3 18 6V11H6V6C6 4.3 6.5 4 12 4ZM6 13H18V15.5C18 16.33 17.33 17 16.5 17H7.5C6.67 17 6 16.33 6 15.5V13ZM8.5 16C9.33 16 10 15.33 10 14.5C10 13.67 9.33 13 8.5 13C7.67 13 7 13.67 7 14.5C7 15.33 7.67 16 8.5 16ZM15.5 16C16.33 16 17 15.33 17 14.5C17 13.67 16.33 13 15.5 13C14.67 13 14 13.67 14 14.5C14 15.33 14.67 16 15.5 16Z"/>
+                  </svg>
+                  <div class="absolute -bottom-1 -right-1 bg-amber-400 text-slate-900 rounded-full w-3.5 h-3.5 flex items-center justify-center text-[8px] font-bold">▼</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- CENTER: DISTANCE IN METERS -->
+            <div class="flex-1 flex items-center justify-center">
+              <span class="text-xs font-medium text-slate-400/90 tracking-wider">
+                {{ getDistance(st.stationNo, activeStations[idx+1]?.stationNo) }}
+              </span>
+            </div>
+
+            <!-- RIGHT RAIL SEGMENT (UP ⬆) -->
+            <div
+              @click.stop="handleStationClick(st, '02')"
+              class="w-16 h-full flex items-center justify-center relative cursor-pointer"
+              title="查看右侧上行方向到站"
+            >
+              <div
+                class="w-2.5 h-full relative overflow-hidden flex flex-col items-center justify-around py-1"
+                :style="{ backgroundColor: activeLine?.lineColor || '#EB5A35' }"
+              >
+                <span class="text-white/80 text-[10px] leading-none">▲</span>
+                <span class="text-white/80 text-[10px] leading-none">▲</span>
+                <span class="text-white/80 text-[10px] leading-none">▲</span>
+              </div>
+
+              <!-- MOVING TRAIN ON RIGHT TRACK (Direction 02) -->
+              <div
+                v-if="getTransitTrain(activeStations[idx+1]?.stationNo, st.stationNo, '02')"
+                @click.stop="openTrainModal(getTransitTrain(activeStations[idx+1]?.stationNo, st.stationNo, '02'), st, '运行中 (上行)')"
+                class="absolute left-9 z-20 flex items-center cursor-pointer train-badge"
+              >
+                <div class="w-7 h-7 rounded-full bg-[#1B64F2] text-white flex items-center justify-center shadow-md border-2 border-white relative">
+                  <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M4 15.5C4 17.43 5.57 19 7.5 19L6 20.5V21H18V20.5L16.5 19C18.43 19 20 17.43 20 15.5V5C20 2.5 17.5 2 12 2C6.5 2 4 2.5 4 5V15.5ZM12 4C17.5 4 18 4.3 18 6V11H6V6C6 4.3 6.5 4 12 4ZM6 13H18V15.5C18 16.33 17.33 17 16.5 17H7.5C6.67 17 6 16.33 6 15.5V13ZM8.5 16C9.33 16 10 15.33 10 14.5C10 13.67 9.33 13 8.5 13C7.67 13 7 13.67 7 14.5C7 15.33 7.67 16 8.5 16ZM15.5 16C16.33 16 17 15.33 17 14.5C17 13.67 16.33 13 15.5 13C14.67 13 14 13.67 14 14.5C14 15.33 14.67 16 15.5 16Z"/>
+                  </svg>
+                  <div class="absolute -top-1 -right-1 bg-emerald-400 text-slate-900 rounded-full w-3.5 h-3.5 flex items-center justify-center text-[8px] font-bold">▲</div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Bottom Notice Bar -->
+    <footer class="bg-white px-4 py-2 flex items-center justify-between text-[11px] text-slate-400 border-t border-slate-100 shrink-0">
+      <span class="text-blue-500 font-medium cursor-pointer" @click="showLineGridModal = true">切换线路</span>
+      <span>本页面信息仅供参考</span>
+    </footer>
+
+    <!-- ==================== EXACT OFFICIAL BOTTOM SHEET: 到站信息弹窗 ==================== -->
+    <div
+      v-if="showArrivalModal && selectedStation"
+      class="absolute inset-0 z-50 flex flex-col justify-end bg-black/40 backdrop-blur-[2px] transition-all"
+      @click.self="closeArrivalModal"
+    >
+      <div class="bg-white w-full rounded-t-3xl p-5 shadow-2xl relative bottom-sheet-anim flex flex-col max-h-[80vh]">
+
+        <!-- TOP BAR: Close Cross Button & Centered Title -->
+        <div class="flex items-center justify-between mb-4 pb-1">
+          <button @click="closeArrivalModal" class="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-slate-600 active:scale-95">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+          <h2 class="text-base font-bold text-slate-800 tracking-wide">到站信息</h2>
+          <div class="w-8"></div>
+        </div>
+
+        <!-- CARD 1: 当前车站 & 刷新数据 -->
+        <div class="bg-[#F8FAFC] rounded-2xl p-4 flex items-center justify-between border border-slate-100 mb-3.5 shadow-2xs">
+          <div>
+            <div class="text-xs text-slate-400 font-medium">当前车站</div>
+            <div class="text-xl font-bold text-slate-900 mt-1 tracking-tight">{{ selectedStation.stationName }}</div>
+          </div>
+          <button
+            @click="refreshArrivalData"
+            class="text-xs text-[#1B64F2] font-semibold flex items-center space-x-1 active:scale-95 bg-blue-50/70 hover:bg-blue-50 px-2.5 py-1.5 rounded-lg transition-transform"
+          >
+            <svg class="w-3.5 h-3.5" :class="arrivalLoading ? 'animate-spin' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+            <span>刷新数据</span>
+          </button>
+        </div>
+
+        <!-- DIRECTION TABS (自动根据点击左/右侧定位高亮) -->
+        <div class="flex items-center space-x-2 mb-2 px-1">
+          <button
+            v-for="dirInfo in stationArrivalDirections"
+            :key="dirInfo.direction"
+            @click="activeArrivalDir = dirInfo.direction"
+            class="text-xs font-bold px-3 py-1.5 rounded-full transition-all flex items-center space-x-1"
+            :class="activeArrivalDir === dirInfo.direction ? 'bg-blue-600 text-white shadow-xs scale-105' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'"
+          >
+            <span>{{ dirInfo.direction === '01' ? '▼' : '▲' }}</span>
+            <span>往{{ dirInfo.endStationName }}</span>
+            <span v-if="activeArrivalDir === dirInfo.direction" class="w-1.5 h-1.5 rounded-full bg-white ml-0.5"></span>
+          </button>
+        </div>
+
+        <!-- CARD 2: 到站预估时间 (第一辆车 / 第二辆车 / 第三辆车) -->
+        <div v-if="currentArrivalInfo" class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100/90 mb-2">
+          <div class="text-sm font-bold text-[#1B64F2] mb-3 flex items-center justify-between">
+            <span class="flex items-center space-x-1">
+              <span>{{ currentArrivalInfo.direction === '01' ? '▼ 下行' : '▲ 上行' }} · 往{{ currentArrivalInfo.endStationName }}</span>
+            </span>
+            <span class="text-[11px] text-slate-400 font-normal">基于实时在途列车计算</span>
+          </div>
+
+          <div class="border-t border-slate-100/80 pt-3">
+            <div class="grid grid-cols-3 text-center">
+              <div>
+                <div class="text-xs text-slate-400 font-medium mb-1">第一辆车</div>
+                <div class="text-xl font-extrabold text-slate-800 tracking-tight">
+                  {{ currentArrivalInfo.train1 || '1min' }}
+                </div>
+              </div>
+              <div>
+                <div class="text-xs text-slate-400 font-medium mb-1">第二辆车</div>
+                <div class="text-xl font-extrabold text-slate-800 tracking-tight">
+                  {{ currentArrivalInfo.train2 || '5min' }}
+                </div>
+              </div>
+              <div>
+                <div class="text-xs text-slate-400 font-medium mb-1">第三辆车</div>
+                <div class="text-xl font-extrabold text-slate-800 tracking-tight">
+                  {{ currentArrivalInfo.train3 || '7min' }}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="arrivalLoading" class="text-center py-2 text-xs text-slate-400">
+          正在获取最新到站数据...
+        </div>
+
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ==================== MODAL: MANAGE QUICK LINES (添加/删除快捷线) ==================== -->
+  <div v-if="showManageQuickLinesModal" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 backdrop-blur-xs" @click.self="showManageQuickLinesModal = false">
+    <div class="bg-white w-full max-w-sm rounded-t-3xl sm:rounded-3xl p-5 shadow-2xl relative max-h-[85vh] flex flex-col bottom-sheet-anim">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div>
+          <h3 class="font-bold text-slate-900 text-base">自定义快捷线路</h3>
+          <p class="text-xs text-slate-400 mt-0.5">添加或删除常用线路，配置自动保存</p>
+        </div>
+        <button @click="showManageQuickLinesModal = false" class="text-slate-400 hover:text-slate-600 p-1">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="py-3 overflow-y-auto flex-1 space-y-4">
+        <!-- Section 1: 已添加快捷线 -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-bold text-slate-700">已添加到快捷栏 (点击 ✕ 删除)</span>
+            <button @click="resetQuickLines" class="text-[11px] text-blue-600 hover:text-blue-700 font-medium">恢复默认</button>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <div
+              v-for="no in popularLines"
+              :key="no"
+              class="inline-flex items-center space-x-1 pl-2.5 pr-1 py-1 rounded-full text-xs font-bold text-white shadow-xs"
+              :style="{ backgroundColor: getLineColor(no) }"
+            >
+              <span>{{ no }}号线</span>
+              <button
+                @click.stop="removeQuickLine(no)"
+                class="w-4 h-4 rounded-full bg-black/20 hover:bg-black/40 flex items-center justify-center text-white ml-0.5 active:scale-90 transition-transform"
+                title="删除此快捷线"
+              >
+                <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            </div>
+          </div>
+          <div v-if="popularLines.length === 0" class="text-xs text-slate-400 py-2">
+            暂无快捷线，请从下方点击线路添加
+          </div>
+        </div>
+
+        <!-- Section 2: 可添加的线路 -->
+        <div>
+          <div class="text-xs font-bold text-slate-700 mb-2">未添加线路 (点击 ＋ 添加)</div>
+          <div class="grid grid-cols-3 gap-2">
+            <button
+              v-for="line in availableLinesToAdd"
+              :key="line.lineNo"
+              @click="addQuickLine(line.lineNo)"
+              class="p-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-blue-50 hover:border-blue-300 flex items-center justify-between active:scale-95 transition-all"
+            >
+              <div class="flex items-center space-x-1.5">
+                <div
+                  class="w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-bold"
+                  :style="{ backgroundColor: line.lineColor }"
+                >
+                  {{ formatLineNumber(line.lineNo) }}
+                </div>
+                <span class="text-xs font-semibold text-slate-700">{{ formatLineNumber(line.lineNo) }}号线</span>
+              </div>
+              <span class="text-blue-600 font-bold text-sm leading-none">＋</span>
+            </button>
+          </div>
+          <div v-if="availableLinesToAdd.length === 0" class="text-xs text-emerald-600 py-1 font-medium">
+            ✓ 全部线路均已添加到快捷栏
+          </div>
+        </div>
+      </div>
+
+      <div class="pt-3 border-t border-slate-100">
+        <button
+          @click="showManageQuickLinesModal = false"
+          class="w-full py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold active:bg-blue-700 shadow-sm"
+        >
+          完成设置
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL: FULL LINE GRID SELECTOR ==================== -->
+  <div v-if="showLineGridModal" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 backdrop-blur-xs">
+    <div class="bg-white w-full max-w-sm rounded-t-3xl sm:rounded-3xl p-5 shadow-2xl relative max-h-[85vh] flex flex-col">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div>
+          <h3 class="font-bold text-slate-900 text-base">快速选择线路</h3>
+          <p class="text-xs text-slate-400">点击任意线路立即切换查看实时列车</p>
+        </div>
+        <button @click="showLineGridModal = false" class="text-slate-400 hover:text-slate-600 p-1">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="grid grid-cols-3 gap-2.5 py-4 overflow-y-auto flex-1">
+        <button
+          v-for="line in allLines"
+          :key="line.lineNo"
+          @click="selectLineFromGrid(line)"
+          class="p-2.5 rounded-xl border flex flex-col items-center justify-center space-y-1 transition-all active:scale-95"
+          :class="currentLineNo === line.lineNo ? 'border-blue-500 bg-blue-50/50 shadow-xs ring-1 ring-blue-500' : 'border-slate-100 bg-slate-50 hover:bg-slate-100'"
+        >
+          <div
+            class="w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-xs"
+            :style="{ backgroundColor: line.lineColor }"
+          >
+            {{ formatLineNumber(line.lineNo) }}
+          </div>
+          <span class="text-xs font-bold text-slate-800">{{ line.lineNameZh || line.lineName }}</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL: TRAIN DETAIL ==================== -->
+  <div v-if="selectedTrain" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
+    <div class="bg-white w-full max-w-xs rounded-2xl p-5 shadow-2xl relative animate-scaleUp">
+      <button @click="selectedTrain = null" class="absolute right-3.5 top-3.5 text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+
+      <div class="flex items-center space-x-3 mb-4">
+        <div class="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-md">
+          <svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M4 15.5C4 17.43 5.57 19 7.5 19L6 20.5V21H18V20.5L16.5 19C18.43 19 20 17.43 20 15.5V5C20 2.5 17.5 2 12 2C6.5 2 4 2.5 4 5V15.5ZM12 4C17.5 4 18 4.3 18 6V11H6V6C6 4.3 6.5 4 12 4ZM6 13H18V15.5C18 16.33 17.33 17 16.5 17H7.5C6.67 17 6 16.33 6 15.5V13ZM8.5 16C9.33 16 10 15.33 10 14.5C10 13.67 9.33 13 8.5 13C7.67 13 7 13.67 7 14.5C7 15.33 7.67 16 8.5 16ZM15.5 16C16.33 16 17 15.33 17 14.5C17 13.67 16.33 13 15.5 13C14.67 13 14 13.67 14 14.5C14 15.33 14.67 16 15.5 16Z"/>
+          </svg>
+        </div>
+        <div>
+          <h3 class="font-bold text-slate-900 text-base">列车 {{ selectedTrain.trainId }} 次</h3>
+          <p class="text-xs text-blue-600 font-medium">{{ selectedTrainStatus }}</p>
+        </div>
+      </div>
+
+      <div class="space-y-2 text-xs bg-slate-50 p-3 rounded-xl mb-4 text-slate-600">
+        <div class="flex justify-between">
+          <span class="text-slate-400">列车编组号</span>
+          <span class="font-semibold text-slate-800">{{ selectedTrain.compAxle || selectedTrain.trainNo || '10' + selectedTrain.trainId }}</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-slate-400">列车主题</span>
+          <span class="font-semibold text-slate-800">{{ selectedTrain.themeName || '普通列车' }}</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-slate-400">当前区间</span>
+          <span class="font-semibold text-slate-800">{{ selectedTrain.trainStationName }} ➔ {{ selectedTrain.trainNextStationName }}</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-slate-400">车厢节数</span>
+          <span class="font-semibold text-slate-800">6节编组 (A型车)</span>
+        </div>
+      </div>
+
+      <button @click="selectedTrain = null" class="w-full py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold active:bg-blue-700">
+        关闭
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const { createApp, ref, computed, onMounted, onUnmounted } = Vue;
+
+  createApp({
+    setup() {
+      const currentView = ref('detail');
+      const searchQuery = ref('');
+      const quickInput = ref('');
+      const showLineGridModal = ref(false);
+      const showManageQuickLinesModal = ref(false);
+      const loading = ref(true);
+
+      const allLines = ref([]);
+      const currentLineNo = ref('02');
+      const distancesMap = ref({});
+      const trainsList = ref([]);
+
+      // Pinned / Popular lines with local persistence
+      const defaultPopularLines = ['1', '2', '3', '4', '6', '7', '17', '18', '19'];
+      const popularLines = ref([...defaultPopularLines]);
+
+      const selectedTrain = ref(null);
+      const selectedTrainStatus = ref('');
+
+      // Arrival Bottom Sheet state
+      const showArrivalModal = ref(false);
+      const selectedStation = ref(null);
+      const arrivalLoading = ref(false);
+      const stationArrivalDirections = ref([]);
+      const activeArrivalDir = ref('01'); // '01' = Left Track (Down), '02' = Right Track (Up)
+
+      const refreshCountdown = ref(5);
+      let timer = null;
+
+      function loadSavedQuickLines() {
+        const saved = localStorage.getItem('cdmetro_custom_quick_lines');
+        if (saved) {
+          try {
+            const arr = JSON.parse(saved);
+            if (Array.isArray(arr) && arr.length > 0) {
+              popularLines.value = arr;
+            }
+          } catch (e) {}
+        }
+      }
+
+      function saveQuickLines() {
+        localStorage.setItem('cdmetro_custom_quick_lines', JSON.stringify(popularLines.value));
+      }
+
+      function addQuickLine(no) {
+        const formatted = formatLineNumber(normalizeLineNo(no));
+        if (!popularLines.value.includes(formatted)) {
+          popularLines.value.push(formatted);
+          saveQuickLines();
+        }
+      }
+
+      function removeQuickLine(no) {
+        popularLines.value = popularLines.value.filter(item => item !== no);
+        saveQuickLines();
+      }
+
+      function resetQuickLines() {
+        popularLines.value = [...defaultPopularLines];
+        saveQuickLines();
+      }
+
+      const availableLinesToAdd = computed(() => {
+        return allLines.value.filter(l => {
+          const formatted = formatLineNumber(l.lineNo);
+          return !popularLines.value.includes(formatted) && !popularLines.value.includes(l.lineNo);
+        });
+      });
+
+      function normalizeLineNo(input) {
+        if (!input) return '02';
+        let str = String(input).trim().toUpperCase();
+        str = str.replace(/LINE|号线|线/gi, '').trim();
+        if (/^\d+$/.test(str)) {
+          return str.length === 1 ? '0' + str : str;
+        }
+        return str;
+      }
+
+      function getLineColor(no) {
+        const norm = normalizeLineNo(no);
+        const l = allLines.value.find(item => item.lineNo === norm);
+        return l ? l.lineColor : '#3B82F6';
+      }
+
+      const filteredLines = computed(() => {
+        if (!searchQuery.value.trim()) return allLines.value;
+        const q = searchQuery.value.trim().toLowerCase();
+        return allLines.value.filter(l =>
+          (l.lineNameZh && l.lineNameZh.toLowerCase().includes(q)) ||
+          (l.lineName && l.lineName.toLowerCase().includes(q)) ||
+          l.lineNo.includes(q)
+        );
+      });
+
+      const activeLine = computed(() => {
+        return allLines.value.find(l => l.lineNo === currentLineNo.value) || allLines.value[0];
+      });
+
+      const activeStations = computed(() => {
+        if (!activeLine.value || !activeLine.value.subLine) return [];
+        const sub = activeLine.value.subLine.find(s => s.direction === '01') || activeLine.value.subLine[0];
+        return sub ? sub.stationList : [];
+      });
+
+      const totalTrains = computed(() => trainsList.value.length);
+
+      const currentArrivalInfo = computed(() => {
+        return stationArrivalDirections.value.find(d => d.direction === activeArrivalDir.value) || stationArrivalDirections.value[0];
+      });
+
+      function formatLineNumber(no) {
+        if (!no) return '';
+        if (no.startsWith('0')) return no.substring(1);
+        return no;
+      }
+
+      function getLineTerminus(line) {
+        if (line.subLine && line.subLine.length > 0) {
+          const s1 = line.subLine[0].stationList;
+          if (s1 && s1.length >= 2) {
+            return `${s1[0].stationName} — ${s1[s1.length - 1].stationName}`;
+          }
+        }
+        return '各站点运营中';
+      }
+
+      function getDistance(st1, st2) {
+        if (!st1 || !st2) return '1500米';
+        const key1 = `${st1}_${st2}`;
+        const key2 = `${st2}_${st1}`;
+        const dist = distancesMap.value[key1] || distancesMap.value[key2];
+        return dist ? `${dist}米` : '1500米';
+      }
+
+      function getDockedTrain(stationNo, direction) {
+        return trainsList.value.find(t =>
+          t.direction === direction &&
+          t.trainStationNo === stationNo &&
+          t.trainStationNo === t.trainNextStationNo
+        );
+      }
+
+      function getTransitTrain(fromStNo, toStNo, direction) {
+        return trainsList.value.find(t =>
+          t.direction === direction &&
+          t.trainStationNo === fromStNo &&
+          t.trainNextStationNo === toStNo
+        );
+      }
+
+      async function fetchStations() {
+        try {
+          const res = await fetch('/api/stations');
+          const json = await res.json();
+          if (json.data && json.data.list) {
+            allLines.value = json.data.list;
+          }
+        } catch (e) {
+          const res = await fetch('./data/stations_all.json');
+          const json = await res.json();
+          allLines.value = json.data.list;
+        }
+      }
+
+      async function fetchDistances(lineNo) {
+        try {
+          const res = await fetch(`/api/station-distance?lineNo=${lineNo}`);
+          const json = await res.json();
+          const map = {};
+          if (json.data && Array.isArray(json.data)) {
+            json.data.forEach(item => {
+              map[`${item.startStation}_${item.endStation}`] = item.distance;
+            });
+          }
+          distancesMap.value = map;
+        } catch (e) {
+          try {
+            const res = await fetch(`./data/distances_${lineNo}.json`);
+            const json = await res.json();
+            const map = {};
+            json.data.forEach(item => {
+              map[`${item.startStation}_${item.endStation}`] = item.distance;
+            });
+            distancesMap.value = map;
+          } catch(err) {}
+        }
+      }
+
+      async function fetchTrainPositions(manual = false) {
+        try {
+          const res = await fetch(`/api/trains/all-locations?lineNo=${currentLineNo.value}`);
+          const json = await res.json();
+          if (json.data && json.data.list) {
+            const flat = [];
+            json.data.list.forEach(dirItem => {
+              const d = dirItem.direction;
+              (dirItem.trainsLos || []).forEach(train => {
+                flat.push({ ...train, direction: d });
+              });
+            });
+            trainsList.value = flat;
+          }
+        } catch (e) {
+          console.warn('Live train location error:', e);
+        }
+        if (manual) refreshCountdown.value = 5;
+      }
+
+      // Handle station click to show arrival modal & AUTO-SELECT DIRECTION TAB
+      async function handleStationClick(st, preferredDir = null) {
+        selectedStation.value = st;
+        showArrivalModal.value = true;
+
+        // Auto locate direction: '01' for Left Track (Down), '02' for Right Track (Up)
+        if (preferredDir) {
+          activeArrivalDir.value = preferredDir;
+        }
+
+        await fetchArrivalData(st, preferredDir);
+      }
+
+      function closeArrivalModal() {
+        showArrivalModal.value = false;
+        selectedStation.value = null;
+      }
+
+      async function refreshArrivalData() {
+        if (!selectedStation.value) return;
+        await fetchArrivalData(selectedStation.value, activeArrivalDir.value);
+        await fetchTrainPositions(true);
+      }
+
+      // Fetch arrival data for station
+      async function fetchArrivalData(st, preferredDir = null) {
+        arrivalLoading.value = true;
+        try {
+          const res = await fetch(`/api/trains/nearby-station?lineNo=${currentLineNo.value}&stationNo=${st.stationNo}`);
+          const json = await res.json();
+
+          const dirs = [];
+          if (json.data && json.data.list && json.data.list.length > 0) {
+            json.data.list.forEach(item => {
+              const dirCode = item.direction;
+              const endName = item.endStationName || (dirCode === '02' ? '上行终点' : '下行终点');
+              const trains = item.trainList || [];
+
+              const t1 = trains[0] ? (trains[0].duration ? Math.max(1, Math.round(trains[0].duration / 60)) + 'min' : '1min') : '1min';
+              const t2 = trains[1] ? (trains[1].duration ? Math.max(2, Math.round(trains[1].duration / 60)) + 'min' : '5min') : '5min';
+              const t3 = trains[2] ? (trains[2].duration ? Math.max(3, Math.round(trains[2].duration / 60)) + 'min' : '7min') : '7min';
+
+              dirs.push({
+                direction: dirCode,
+                endStationName: endName,
+                train1: t1,
+                train2: t2,
+                train3: t3
+              });
+            });
+          }
+
+          if (dirs.length === 0) {
+            const terminus = activeLine.value?.subLine || [];
+            const end1 = terminus[0]?.stationList?.[terminus[0]?.stationList?.length - 1]?.stationName || '下行终点';
+            const end2 = terminus[0]?.stationList?.[0]?.stationName || '上行终点';
+            dirs.push(
+              { direction: '01', endStationName: end1, train1: '1min', train2: '5min', train3: '7min' },
+              { direction: '02', endStationName: end2, train1: '2min', train2: '6min', train3: '9min' }
+            );
+          }
+
+          // Sort so direction 01 (Down/Left) and 02 (Up/Right) are in intuitive order
+          dirs.sort((a, b) => (a.direction === '01' ? -1 : 1));
+          stationArrivalDirections.value = dirs;
+
+          // Apply auto-location of direction tab
+          if (preferredDir && dirs.some(d => d.direction === preferredDir)) {
+            activeArrivalDir.value = preferredDir;
+          } else if (!dirs.some(d => d.direction === activeArrivalDir.value)) {
+            activeArrivalDir.value = dirs[0].direction;
+          }
+        } catch (e) {
+          console.warn('Nearby station error:', e);
+        } finally {
+          arrivalLoading.value = false;
+        }
+      }
+
+      function switchLine(lineNo) {
+        const norm = normalizeLineNo(lineNo);
+        currentLineNo.value = norm;
+        loading.value = true;
+        selectedStation.value = null;
+        showArrivalModal.value = false;
+
+        fetchDistances(norm);
+        fetchTrainPositions(true);
+
+        const url = new URL(window.location);
+        url.searchParams.set('line', formatLineNumber(norm));
+        window.history.replaceState({}, '', url);
+
+        setTimeout(() => { loading.value = false; }, 250);
+      }
+
+      function quickJumpTo(lineInput) {
+        switchLine(lineInput);
+        currentView.value = 'detail';
+      }
+
+      function handleQuickSubmit() {
+        const val = quickInput.value.trim();
+        if (!val) return;
+
+        const norm = normalizeLineNo(val);
+        const match = allLines.value.find(l => l.lineNo === norm || l.lineNo === val);
+        if (match) {
+          quickJumpTo(match.lineNo);
+          quickInput.value = '';
+          return;
+        }
+
+        for (const line of allLines.value) {
+          if (line.subLine) {
+            for (const sub of line.subLine) {
+              const st = sub.stationList?.find(s => s.stationName.includes(val) || s.stationNameZh?.includes(val));
+              if (st) {
+                quickJumpTo(line.lineNo);
+                quickInput.value = '';
+                return;
+              }
+            }
+          }
+        }
+
+        alert(`未找到包含 "${val}" 的线路或站点，请尝试输入数字如 2 或 17`);
+      }
+
+      function selectLine(line) {
+        switchLine(line.lineNo);
+        currentView.value = 'detail';
+      }
+
+      function selectLineFromGrid(line) {
+        switchLine(line.lineNo);
+        showLineGridModal.value = false;
+        currentView.value = 'detail';
+      }
+
+      function toggleView() {
+        currentView.value = currentView.value === 'list' ? 'detail' : 'list';
+      }
+
+      function handleBack() {
+        if (currentView.value === 'detail') {
+          currentView.value = 'list';
+        } else {
+          currentView.value = 'detail';
+        }
+      }
+
+      function openTrainModal(train, station, status) {
+        selectedTrain.value = train;
+        selectedTrainStatus.value = status;
+      }
+
+      onMounted(async () => {
+        loadSavedQuickLines();
+
+        const params = new URLSearchParams(window.location.search);
+        const urlLine = params.get('line') || params.get('lineNo');
+        if (urlLine) {
+          currentLineNo.value = normalizeLineNo(urlLine);
+        }
+
+        await fetchStations();
+        await fetchDistances(currentLineNo.value);
+        await fetchTrainPositions();
+        loading.value = false;
+
+        timer = setInterval(() => {
+          refreshCountdown.value--;
+          if (refreshCountdown.value <= 0) {
+            refreshCountdown.value = 5;
+            fetchTrainPositions();
+          }
+        }, 1000);
+      });
+
+      onUnmounted(() => {
+        if (timer) clearInterval(timer);
+      });
+
+      return {
+        currentView,
+        searchQuery,
+        quickInput,
+        showLineGridModal,
+        showManageQuickLinesModal,
+        popularLines,
+        availableLinesToAdd,
+        loading,
+        allLines,
+        currentLineNo,
+        filteredLines,
+        activeLine,
+        activeStations,
+        totalTrains,
+        refreshCountdown,
+        selectedTrain,
+        selectedTrainStatus,
+        showArrivalModal,
+        selectedStation,
+        arrivalLoading,
+        stationArrivalDirections,
+        activeArrivalDir,
+        currentArrivalInfo,
+        formatLineNumber,
+        getLineTerminus,
+        getLineColor,
+        normalizeLineNo,
+        getDistance,
+        getDockedTrain,
+        getTransitTrain,
+        switchLine,
+        quickJumpTo,
+        handleQuickSubmit,
+        addQuickLine,
+        removeQuickLine,
+        resetQuickLines,
+        selectLine,
+        selectLineFromGrid,
+        toggleView,
+        handleBack,
+        handleStationClick,
+        closeArrivalModal,
+        refreshArrivalData,
+        fetchTrainPositions,
+        openTrainModal
+      };
+    }
+  }).mount('#app');
+</script>
+
+</body>
+</html>

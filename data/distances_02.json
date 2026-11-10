@@ -1,0 +1,198 @@
+{
+  "code": 0,
+  "msg": "",
+  "data": [
+    {
+      "lineNo": "02",
+      "startStation": "0221",
+      "endStation": "0222",
+      "distance": 1663
+    },
+    {
+      "lineNo": "02",
+      "startStation": "0222",
+      "endStation": "0223",
+      "distance": 1755
+    },
+    {
+      "lineNo": "02",
+      "startStation": "0223",
+      "endStation": "0224",
+      "distance": 2192
+    },
+    {
+      "lineNo": "02",
+      "startStation": "0224",
+      "endStation": "0225",
+      "distance": 1112
+    },
+    {
+      "lineNo": "02",
+      "startStation": "0225",
+      "endStation": "0226",
+      "distance": 1106
+    },
+    {
+      "lineNo": "02",
+      "startStation": "0226",
+      "endStation": "0227",
+      "distance": 990
+    },
+    {
+      "lineNo": "02",
+      "startStation": "0227",
+      "endStation": "0228",
+      "distance": 1537
+    },
+    {
+      "lineNo": "02",
+      "startStation": "0228",
+      "endStation": "0229",
+      "distance": 902
+    },
+    {
+      "lineNo": "02",
+      "startStation": "0229",
+      "endStation": "0230",
+      "distance": 1168
+    },
+    {
+      "lineNo": "02",
+      "startStation": "0230",
+      "endStation": "0231",
+      "distance": 1159
+    },
+    {
+      "lineNo": "02",
+      "startStation": "0231",
+      "endStation": "0232",
+      "distance": 1335
+    },
+    {
+      "lineNo": "02",
+      "startStation": "0232",
+      "endStation": "0233",
+      "distance": 840
+    },
+    {
+      "lineNo": "02",
+      "startStation": "0233",
+      "endStation": "0234",
+      "distance": 894
+    },
+    {
+      "lineNo": "02",
+      "startStation": "0234",
+      "endStation": "0235",
+      "distance": 971
+    },
+    {
+      "lineNo": "02",
+      "startStation": "0235",
+      "endStation": "0236",
+      "distance": 1408
+    },
+    {
+      "lineNo": "02",
+      "startStation": "0236",
+      "endStation": "0237",
+      "distance": 902
+    },
+    {
+      "lineNo": "02",
+      "startStation": "0237",
+      "endStation": "0238",
+      "distance": 784
+    },
+    {
+      "lineNo": "02",
+      "startStation": "0238",
+      "endStation": "0239",
+      "distance": 1543
+    },
+    {
+      "lineNo": "02",
+      "startStation": "0239",
+      "endStation": "0240",
+      "distance": 668
+    },
+    {
+      "lineNo": "02",
+      "startStation": "0240",
+      "endStation": "0241",
+      "distance": 1122
+    },
+    {
+      "lineNo": "02",
+      "startStation": "0241",
+      "endStation": "0242",
+      "distance": 1670
+    },
+    {
+      "lineNo": "02",
+      "startStation": "0242",
+      "endStation": "0243",
+      "distance": 888
+    },
+    {
+      "lineNo": "02",
+      "startStation": "0243",
+      "endStation": "0244",
+      "distance": 1502
+    },
+    {
+      "lineNo": "02",
+      "startStation": "0244",
+      "endStation": "0245",
+      "distance": 1003
+    },
+    {
+      "lineNo": "02",
+      "startStation": "0245",
+      "endStation": "0246",
+      "distance": 1568
+    },
+    {
+      "lineNo": "02",
+      "startStation": "0246",
+      "endStation": "0253",
+      "distance": 2689
+    },
+    {
+      "lineNo": "02",
+      "startStation": "0253",
+      "endStation": "0254",
+      "distance": 546
+    },
+    {
+      "lineNo": "02",
+      "startStation": "0254",
+      "endStation": "0255",
+      "distance": 1225
+    },
+    {
+      "lineNo": "02",
+      "startStation": "0255",
+      "endStation": "0256",
+      "distance": 1300
+    },
+    {
+      "lineNo": "02",
+      "startStation": "0256",
+      "endStation": "0257",
+      "distance": 1813
+    },
+    {
+      "lineNo": "02",
+      "startStation": "0257",
+      "endStation": "0258",
+      "distance": 1807
+    },
+    {
+      "lineNo": "02",
+      "startStation": "0258",
+      "endStation": "0259",
+      "distance": 1664
+    }
+  ]
+}
