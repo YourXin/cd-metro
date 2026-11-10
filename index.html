@@ -935,6 +935,25 @@
             暂未记录。请在首页快捷栏点击任意快捷站，即可自动记录。
           </div>
         </div>
+
+        <!-- Cache Management: 每日自动更新 1 次 -->
+        <div class="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
+          <div class="pr-2">
+            <div class="text-xs font-bold text-slate-700">离线线路数据缓存</div>
+            <div class="text-[11px] text-slate-400 mt-0.5">
+              每天后台自动更新 1 次 · 上次: {{ lastCacheUpdatedText }}
+            </div>
+          </div>
+          <button
+            type="button"
+            @click="manualRefreshCache"
+            class="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 text-blue-600 hover:bg-blue-50 active:scale-95 transition-all flex items-center space-x-1 shrink-0"
+            :disabled="cacheUpdating"
+          >
+            <svg class="w-3.5 h-3.5" :class="cacheUpdating ? 'animate-spin' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            <span>{{ cacheUpdating ? '更新中...' : '立即刷新' }}</span>
+          </button>
+        </div>
       </div>
 
       <div class="pt-3 border-t border-slate-100">
@@ -1246,7 +1265,68 @@
 
       const STATIONS_CACHE_KEY = 'cdmetro_cache_stations_v1';
       const DISTANCES_CACHE_KEY = 'cdmetro_cache_distances_v1';
+      const CACHE_TIME_KEY = 'cdmetro_cache_last_updated_time_v1';
+      const ONE_DAY_MS = 24 * 60 * 60 * 1000; // 每天自动更新 1 次 (24小时)
+
+      const lastCacheUpdatedText = ref('未记录');
+      const cacheUpdating = ref(false);
       let cachedAllDistances = null;
+
+      function formatCacheTime(ts) {
+        if (!ts) return '未记录';
+        const d = new Date(Number(ts));
+        if (isNaN(d.getTime())) return '未记录';
+        const now = new Date();
+        const isToday = d.toDateString() === now.toDateString();
+        const pad = n => String(n).padStart(2, '0');
+        const timeStr = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        if (isToday) return `今天 ${timeStr}`;
+        return `${d.getMonth() + 1}/${d.getDate()} ${timeStr}`;
+      }
+
+      function isCacheExpired() {
+        const last = localStorage.getItem(CACHE_TIME_KEY);
+        if (!last) return true;
+        const age = Date.now() - parseInt(last, 10);
+        return isNaN(age) || age > ONE_DAY_MS;
+      }
+
+      async function checkAndUpdateDailyCache(force = false) {
+        const savedTime = localStorage.getItem(CACHE_TIME_KEY);
+        if (savedTime) lastCacheUpdatedText.value = formatCacheTime(savedTime);
+
+        if (!force && !isCacheExpired()) return;
+
+        cacheUpdating.value = true;
+        try {
+          const ts = Date.now();
+          const res = await fetch(`./data/stations_all.json?_t=${ts}`);
+          const json = await res.json();
+          if (json.data && json.data.list && json.data.list.length > 0) {
+            allLines.value = json.data.list;
+            localStorage.setItem(STATIONS_CACHE_KEY, JSON.stringify(json.data.list));
+          }
+
+          const distRes = await fetch(`./data/distances_all.json?_t=${ts}`);
+          const distJson = await distRes.json();
+          if (distJson.data) {
+            cachedAllDistances = distJson.data;
+            localStorage.setItem(DISTANCES_CACHE_KEY, JSON.stringify(distJson.data));
+            fetchDistances(currentLineNo.value);
+          }
+
+          localStorage.setItem(CACHE_TIME_KEY, String(Date.now()));
+          lastCacheUpdatedText.value = formatCacheTime(Date.now());
+        } catch (e) {
+          console.warn('Daily cache update error:', e);
+        } finally {
+          cacheUpdating.value = false;
+        }
+      }
+
+      async function manualRefreshCache() {
+        await checkAndUpdateDailyCache(true);
+      }
 
       async function fetchStations() {
         // 1. 优先从浏览器 localStorage 极速读取（0.001秒纯内存秒开）
@@ -1268,6 +1348,8 @@
           if (json.data && json.data.list) {
             allLines.value = json.data.list;
             localStorage.setItem(STATIONS_CACHE_KEY, JSON.stringify(json.data.list));
+            localStorage.setItem(CACHE_TIME_KEY, String(Date.now()));
+            lastCacheUpdatedText.value = formatCacheTime(Date.now());
             return;
           }
         } catch (e) {
@@ -1705,6 +1787,13 @@
         await fetchTrainPositions();
         loading.value = false;
 
+        // 每日自动检查并静默更新离线线路数据（过期超过24小时则在后台静默刷新）
+        const savedCacheTime = localStorage.getItem(CACHE_TIME_KEY);
+        if (savedCacheTime) lastCacheUpdatedText.value = formatCacheTime(savedCacheTime);
+        setTimeout(() => {
+          checkAndUpdateDailyCache();
+        }, 1500);
+
         // 默认弹窗上次使用的快捷站（若用户在设置中开启且存在上次记录）
         if (autoOpenLastQuickStation.value && lastUsedQuickStation.value) {
           setTimeout(() => {
@@ -1754,6 +1843,9 @@
         lastUsedQuickStation,
         showSettingsModal,
         toggleAutoOpenLastQuick,
+        lastCacheUpdatedText,
+        cacheUpdating,
+        manualRefreshCache,
         loading,
         allLines,
         currentLineNo,
