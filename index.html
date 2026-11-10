@@ -586,7 +586,7 @@
                 <div class="text-xs text-slate-400 font-medium mb-1">第一辆车</div>
                 <div
                   class="text-lg sm:text-xl font-extrabold tracking-tight truncate"
-                  :class="currentArrivalInfo.train1 === '即将进站' || currentArrivalInfo.train1 === '本站停靠' ? 'text-amber-600' : 'text-slate-800'"
+                  :class="currentArrivalInfo.train1 === '列车进站' || currentArrivalInfo.train1 === '本站停靠' ? 'text-blue-600' : 'text-slate-800'"
                 >
                   {{ currentArrivalInfo.train1 || '--' }}
                 </div>
@@ -598,7 +598,7 @@
                 <div class="text-xs text-slate-400 font-medium mb-1">第二辆车</div>
                 <div
                   class="text-lg sm:text-xl font-extrabold tracking-tight truncate"
-                  :class="currentArrivalInfo.train2 === '即将进站' || currentArrivalInfo.train2 === '本站停靠' ? 'text-amber-600' : 'text-slate-800'"
+                  :class="currentArrivalInfo.train2 === '列车进站' || currentArrivalInfo.train2 === '本站停靠' ? 'text-blue-600' : 'text-slate-800'"
                 >
                   {{ currentArrivalInfo.train2 || '--' }}
                 </div>
@@ -610,7 +610,7 @@
                 <div class="text-xs text-slate-400 font-medium mb-1">第三辆车</div>
                 <div
                   class="text-lg sm:text-xl font-extrabold tracking-tight truncate"
-                  :class="currentArrivalInfo.train3 === '即将进站' || currentArrivalInfo.train3 === '本站停靠' ? 'text-amber-600' : 'text-slate-800'"
+                  :class="currentArrivalInfo.train3 === '列车进站' || currentArrivalInfo.train3 === '本站停靠' ? 'text-blue-600' : 'text-slate-800'"
                 >
                   {{ currentArrivalInfo.train3 || '--' }}
                 </div>
@@ -1434,7 +1434,7 @@
                 hops = ((targetIdx - effectiveToIdx + N) % N) + 0.5;
                 const fromName = stations[effectiveFromIdx]?.stationName || '';
                 const toName = stations[effectiveToIdx]?.stationName || '';
-                statusDesc = hops === 0.5 ? '即将进站' : `${fromName} ➔ ${toName}`;
+                statusDesc = hops === 0.5 ? '列车进站' : `${fromName} ➔ ${toName}`;
               }
               if (hops >= N - 2) hops = -1;
             } else {
@@ -1451,7 +1451,7 @@
                   hops = (targetIdx - effectiveToIdx) + 0.5;
                   const fromName = stations[effectiveFromIdx]?.stationName || '';
                   const toName = stations[effectiveToIdx]?.stationName || '';
-                  statusDesc = hops === 0.5 ? '即将进站' : `${fromName} ➔ ${toName}`;
+                  statusDesc = hops === 0.5 ? '列车进站' : `${fromName} ➔ ${toName}`;
                 }
               }
             }
@@ -1470,10 +1470,10 @@
           function formatTrainTime(item, defaultEmptyText = '等待发车') {
             if (!item) return { time: defaultEmptyText, sub: '' };
             if (item.hops === 0) {
-              return { time: '本站停靠', sub: '正在站台' };
+              return { time: '列车进站', sub: '本站停靠' };
             }
             if (item.hops === 0.5) {
-              return { time: '即将进站', sub: '< 1 分钟' };
+              return { time: '列车进站', sub: '< 1 分钟' };
             }
             const minutes = Math.max(1, Math.round(item.hops * 2));
             const sub = `距 ${Math.ceil(item.hops)} 站 · ${item.statusDesc}`;
@@ -1539,8 +1539,8 @@
                 const dur = trains[0].duration;
                 const targetDir = stationArrivalDirections.value.find(d => d.direction === dirCode);
                 if (targetDir && dur !== undefined && dur !== null) {
-                  if (dur < 30) {
-                    targetDir.train1 = '即将进站';
+                  if (dur < 45) {
+                    targetDir.train1 = '列车进站';
                     targetDir.train1Sub = '< 1 分钟';
                   } else {
                     targetDir.train1 = Math.max(1, Math.round(dur / 60)) + 'min';
