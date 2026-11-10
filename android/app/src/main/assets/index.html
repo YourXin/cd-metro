@@ -1303,6 +1303,8 @@
       }
 
       async function checkAndUpdateDailyCache(force = false) {
+        if (cacheUpdating.value) return;
+
         const savedTime = localStorage.getItem(CACHE_TIME_KEY);
         if (savedTime) lastCacheUpdatedText.value = formatCacheTime(savedTime);
 
@@ -1320,7 +1322,7 @@
 
           const distRes = await fetch(`./data/distances_all.json?_t=${ts}`);
           const distJson = await distRes.json();
-          if (distJson.data) {
+          if (distJson.data && typeof distJson.data === 'object' && Object.keys(distJson.data).length > 0) {
             cachedAllDistances = distJson.data;
             localStorage.setItem(DISTANCES_CACHE_KEY, JSON.stringify(distJson.data));
             fetchDistances(currentLineNo.value);
@@ -1782,6 +1784,48 @@
         selectedTrainStatus.value = status;
       }
 
+      function startPolling() {
+        if (timer) clearInterval(timer);
+        timer = setInterval(async () => {
+          refreshCountdown.value--;
+          if (refreshCountdown.value <= 0) {
+            refreshCountdown.value = 5;
+            await fetchTrainPositions();
+            // 到站信息弹窗开启时，根据列车新位置实时更新到站时间与距离
+            if (showArrivalModal.value && selectedStation.value) {
+              const liveDirs = calculateArrivalFromLiveTrains(selectedStation.value, activeLine.value, trainsList.value);
+              if (liveDirs.length > 0) {
+                stationArrivalDirections.value = liveDirs;
+              }
+            }
+          }
+        }, 1000);
+      }
+
+      function stopPolling() {
+        if (timer) {
+          clearInterval(timer);
+          timer = null;
+        }
+      }
+
+      // 监听应用前后台切换（切出后台彻底暂停轮询，0 耗电 0 流量；切回前台立即静默唤醒刷新）
+      const handleVisibilityChange = () => {
+        if (document.hidden) {
+          stopPolling();
+        } else {
+          refreshCountdown.value = 5;
+          fetchTrainPositions();
+          if (showArrivalModal.value && selectedStation.value) {
+            const liveDirs = calculateArrivalFromLiveTrains(selectedStation.value, activeLine.value, trainsList.value);
+            if (liveDirs.length > 0) {
+              stationArrivalDirections.value = liveDirs;
+            }
+          }
+          startPolling();
+        }
+      };
+
       onMounted(async () => {
         loadSavedQuickLines();
         loadSavedQuickStations();
@@ -1812,24 +1856,13 @@
           }, 100);
         }
 
-        timer = setInterval(async () => {
-          refreshCountdown.value--;
-          if (refreshCountdown.value <= 0) {
-            refreshCountdown.value = 5;
-            await fetchTrainPositions();
-            // 到站信息弹窗开启时，根据列车新位置实时更新到站时间与距离
-            if (showArrivalModal.value && selectedStation.value) {
-              const liveDirs = calculateArrivalFromLiveTrains(selectedStation.value, activeLine.value, trainsList.value);
-              if (liveDirs.length > 0) {
-                stationArrivalDirections.value = liveDirs;
-              }
-            }
-          }
-        }, 1000);
+        startPolling();
+        document.addEventListener('visibilitychange', handleVisibilityChange);
       });
 
       onUnmounted(() => {
-        if (timer) clearInterval(timer);
+        stopPolling();
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
       });
 
       return {

@@ -11,6 +11,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout Code
@@ -39,29 +40,29 @@ jobs:
       - name: Prepare APK Artifact
         run: |
           mkdir -p build_output
-          cp android/app/build/outputs/apk/debug/app-debug.apk build_output/cdmetro-v1.0.4.apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk build_output/cdmetro-v1.0.5.apk
           ls -lh build_output/
 
       - name: Upload APK as Artifact
         uses: actions/upload-artifact@v4
         with:
           name: cdmetro-android-apk
-          path: build_output/cdmetro-v1.0.4.apk
+          path: build_output/cdmetro-v1.0.5.apk
           retention-days: 30
 
       - name: Create GitHub Release with APK
         uses: softprops/action-gh-release@v2
         if: github.ref == 'refs/heads/main'
         with:
-          tag_name: v1.0.4
-          name: 成都地铁实时位置安卓版 v1.0.4 (优化状态栏紧凑间隙与顶部空白)
+          tag_name: v1.0.5
+          name: 成都地铁实时位置安卓版 v1.0.5 (前后台智能休眠省电与即时唤醒刷新)
           body: |
-            ### 🚇 成都地铁实时列车位置与到站信息 安卓原生版 (v1.0.4)
+            ### 🚇 成都地铁实时列车位置与到站信息 安卓原生版 (v1.0.5)
 
-            - 🎨 **消除状态栏与导航栏间多余空白区域**：修复 Java 容器状态栏内边距与 WebView 内 safe-area-inset-top 双重计算叠加导致顶部空出 70+px 间隙的问题；原生端 WebView 消费顶部 inset 并自动激活紧凑导航栏样式，导航栏紧凑居中展示。
-            - ⏱️ **全线在途列车实时计算到站时间**：基于全线在途列车物理位置与站间距拓扑模型精准推算第 1、2、3 辆车动态倒计时。
-            - 🚉 **1号线双交路多终点支持**：支持往科学城与往五根松支线列车到站区分。
-            - 🔄 **线路元数据 24 小时自动刷新**：既享本地秒开极致性能，又保障新开车站与运营时刻每日自动同步。
-          files: build_output/cdmetro-v1.0.4.apk
+            - 🔋 **切出后台 0 耗电 0 偷跑流量**：原生 `MainActivity` 覆盖 `onPause` / `onResume` 深度挂起 `pauseTimers()`，前端深度接入 `visibilitychange` 监听；切换到后台或锁屏时，高频轮询定时器与网络请求彻底终止！
+            - ⚡ **切回前台即时唤醒秒级刷新**：切回 App 或解锁点亮屏幕瞬间，立即无缝发起最新列车位置与到站推算，倒计时重置，无需手动下拉或苦等下一轮刷新。
+            - 🎨 **状态栏紧凑标准布局**：消除状态栏内边距重复叠加，Header 导航栏紧凑居中展示。
+            - ⏱️ **全线在途列车物理位置实时计算**：第一、二、三辆车动态倒计时。
+          files: build_output/cdmetro-v1.0.5.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

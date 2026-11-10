@@ -121,7 +121,7 @@ public class MainActivity extends Activity {
         settings.setAllowUniversalAccessFromFileURLs(true);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
-        settings.setUserAgentString(settings.getUserAgentString() + " CDMetroNative/1.0.4");
+        settings.setUserAgentString(settings.getUserAgentString() + " CDMetroNative/1.0.5");
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
@@ -198,6 +198,33 @@ public class MainActivity extends Activity {
 
         // Load through virtual HTTPS domain so fetch() and all modern browser APIs work flawlessly!
         webView.loadUrl(APP_ORIGIN + "/index.html");
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        if (webView != null) {
+            webView.onPause();
+            webView.pauseTimers();
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (webView != null) {
+            webView.onResume();
+            webView.resumeTimers();
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (webView != null) {
+            webView.destroy();
+            webView = null;
+        }
+        super.onDestroy();
     }
 
     @Override
